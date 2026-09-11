@@ -161,7 +161,7 @@ namespace KerkenezTicket.UI.Tabs
 
             // App Filter
             var lblApp = new Label { Text = "App:", AutoSize = true, Margin = new Padding(0, 6, 4, 0), Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(70, 75, 85) };
-            _cboAppFilter = new ComboBox { Width = 115, Height = 28, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 1, 14, 0) };
+            _cboAppFilter = new ComboBox { Width = 135, Height = 28, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 1, 14, 0) };
             _cboAppFilter.SelectedIndexChanged += (s, e) =>
             {
                 _selectedAppFilter = _cboAppFilter.SelectedItem?.ToString() ?? "all";
@@ -594,7 +594,15 @@ namespace KerkenezTicket.UI.Tabs
             string currApp = _selectedAppFilter;
             _cboAppFilter.Items.Clear();
             _cboAppFilter.Items.Add("All Apps");
-            foreach (var app in _configService.Settings.KnownApps)
+
+            var dbApps = _dbService.GetAllAppNames();
+            _configService.SyncKnownApps(dbApps);
+            var allApps = dbApps.Union(_configService.Settings.KnownApps, StringComparer.OrdinalIgnoreCase)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var app in allApps)
             {
                 _cboAppFilter.Items.Add(app);
             }
@@ -642,7 +650,12 @@ namespace KerkenezTicket.UI.Tabs
             }
             else if (string.Equals(grouping, "App", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (var a in _configService.Settings.KnownApps)
+                var dbApps = _dbService.GetAllAppNames();
+                var allApps = dbApps.Union(_configService.Settings.KnownApps, StringComparer.OrdinalIgnoreCase)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var a in allApps)
                 {
                     var grp = new ListViewGroup(a, $"📱  {a}");
                     groupMap[a.ToLowerInvariant()] = grp;
@@ -870,7 +883,7 @@ namespace KerkenezTicket.UI.Tabs
         {
             if (_currentTicket == null) return;
 
-            using var dlg = new TicketEditDialog(_currentTicket, _configService);
+            using var dlg = new TicketEditDialog(_currentTicket, _configService, _dbService);
             if (dlg.ShowDialog(this) == DialogResult.OK)
             {
                 _dbService.UpdateTicket(dlg.UpdatedTicket);

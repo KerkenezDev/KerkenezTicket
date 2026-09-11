@@ -127,27 +127,45 @@ namespace KerkenezTicket.Services
             }
         }
 
+        public void SyncKnownApps(System.Collections.Generic.IEnumerable<string> apps)
+        {
+            if (apps == null) return;
+            bool changed = false;
+            if (Settings.KnownApps == null)
+            {
+                Settings.KnownApps = new System.Collections.Generic.List<string>();
+                changed = true;
+            }
+
+            foreach (var app in apps)
+            {
+                if (!string.IsNullOrWhiteSpace(app) &&
+                    !Settings.KnownApps.Contains(app.Trim(), StringComparer.OrdinalIgnoreCase))
+                {
+                    Settings.KnownApps.Add(app.Trim());
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                Settings.KnownApps.Sort(StringComparer.OrdinalIgnoreCase);
+                SaveConfig(Settings);
+            }
+        }
+
         private static AppSettings HealSettings(AppSettings s)
         {
             if (s == null) return AppSettings.CreateDefault();
-
-            if (string.IsNullOrWhiteSpace(s.DefaultApp)) s.DefaultApp = s.KnownApps?.FirstOrDefault() ?? "";
-            if (string.IsNullOrWhiteSpace(s.DefaultPriority)) s.DefaultPriority = "Medium";
-            if (string.IsNullOrWhiteSpace(s.DefaultType)) s.DefaultType = "Bug";
 
             if (s.KnownApps == null)
             {
                 s.KnownApps = new System.Collections.Generic.List<string>();
             }
-            else
-            {
-                s.KnownApps.RemoveAll(a => a.Equals("mail", StringComparison.OrdinalIgnoreCase) || a.Equals("ticket", StringComparison.OrdinalIgnoreCase));
-            }
 
-            if (s.DefaultApp == "mail" || s.DefaultApp == "ticket")
-            {
-                s.DefaultApp = s.KnownApps.FirstOrDefault() ?? "";
-            }
+            if (string.IsNullOrWhiteSpace(s.DefaultApp)) s.DefaultApp = s.KnownApps?.FirstOrDefault() ?? "";
+            if (string.IsNullOrWhiteSpace(s.DefaultPriority)) s.DefaultPriority = "Medium";
+            if (string.IsNullOrWhiteSpace(s.DefaultType)) s.DefaultType = "Bug";
 
             if (s.KnownTypes == null || s.KnownTypes.Count == 0)
             {
@@ -210,17 +228,20 @@ namespace KerkenezTicket.Services
                 // 2. Remove CLI files and User PATH registration
                 CliInstallerService.UninstallCli();
 
-                // 3. Clean temporary files
+                // 3. Remove Desktop and Start Menu shortcuts
+                ShortcutService.RemoveShortcuts();
+
+                // 4. Clean temporary files
                 CleanTempFolder();
 
-                // 4. Release all SQLite connection pools so files can be deleted without locks
+                // 5. Release all SQLite connection pools so files can be deleted without locks
                 try
                 {
                     Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
                 }
                 catch { }
 
-                // 5. Delete AppData directory (%APPDATA%\Kerkenez\ticket)
+                // 6. Delete AppData directory (%APPDATA%\Kerkenez\ticket)
                 if (Directory.Exists(AppDataFolder))
                 {
                     for (int i = 0; i < 3; i++)
@@ -237,7 +258,7 @@ namespace KerkenezTicket.Services
                     }
                 }
 
-                // 6. If parent directory (%APPDATA%\Kerkenez) is now empty, delete it
+                // 7. If parent directory (%APPDATA%\Kerkenez) is now empty, delete it
                 string? parent = Path.GetDirectoryName(AppDataFolder);
                 if (parent != null && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
                 {

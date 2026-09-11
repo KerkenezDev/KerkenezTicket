@@ -88,8 +88,8 @@ namespace KerkenezTicket.Services
                 ";
                 cmd.ExecuteNonQuery();
 
-                // Clean out any unreferenced default apps that have no tickets
-                CleanUnreferencedDefaultApps(conn);
+                // Automatically sync and restore any apps found in tickets to app_categories
+                SyncAppsFromTickets(conn);
 
                 // Ensure minimal clean defaults for apps and types
                 EnsureDefaultSeedData(conn);
@@ -123,14 +123,16 @@ namespace KerkenezTicket.Services
             catch { }
         }
 
-        private static void CleanUnreferencedDefaultApps(SqliteConnection conn)
+        private static void SyncAppsFromTickets(SqliteConnection conn)
         {
             try
             {
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
-                    DELETE FROM app_categories 
-                    WHERE name IN ('mail', 'ticket', 'calendar', 'news', 'voice', 'razer');
+                    INSERT OR IGNORE INTO app_categories (name, display_name, color_hex, description)
+                    SELECT DISTINCT lower(app), app, '#0078D7', ''
+                    FROM tickets
+                    WHERE app IS NOT NULL AND trim(app) != '';
                 ";
                 cmd.ExecuteNonQuery();
             }
@@ -208,6 +210,23 @@ namespace KerkenezTicket.Services
                 cmd.Parameters.AddWithValue("@killed", ticket.KilledAt?.ToString("o") ?? (object)DBNull.Value);
 
                 cmd.ExecuteNonQuery();
+
+                // Ensure category exists for this ticket's app
+                try
+                {
+                    using var appCmd = conn.CreateCommand();
+                    appCmd.Transaction = transaction;
+                    appCmd.CommandText = @"
+                        INSERT OR IGNORE INTO app_categories (name, display_name, color_hex, description)
+                        VALUES (@name, @display, '#0078D7', '');
+                    ";
+                    string cleanApp = (ticket.App ?? "general").Trim().ToLowerInvariant();
+                    appCmd.Parameters.AddWithValue("@name", cleanApp);
+                    appCmd.Parameters.AddWithValue("@display", cleanApp);
+                    appCmd.ExecuteNonQuery();
+                }
+                catch { }
+
                 transaction.Commit();
 
                 return ticket;
@@ -523,6 +542,61 @@ namespace KerkenezTicket.Services
                 cmd.CommandText = "DELETE FROM app_categories WHERE lower(name) = lower(@name);";
                 cmd.Parameters.AddWithValue("@name", name.Trim());
                 return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        public void EnsureAppCategoryExists(string name, string? displayName = null, string? colorHex = null)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return;
+            lock (_dbLock)
+            {
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        INSERT OR IGNORE INTO app_categories (name, display_name, color_hex, description)
+                        VALUES (@name, @display, @color, '');
+                    ";
+                    string clean = name.Trim().ToLowerInvariant();
+                    cmd.Parameters.AddWithValue("@name", clean);
+                    cmd.Parameters.AddWithValue("@display", string.IsNullOrWhiteSpace(displayName) ? clean : displayName.Trim());
+                    cmd.Parameters.AddWithValue("@color", string.IsNullOrWhiteSpace(colorHex) ? "#0078D7" : colorHex.Trim());
+                    cmd.ExecuteNonQuery();
+                }
+                catch { }
+            }
+        }
+
+        public List<string> GetAllAppNames()
+        {
+            lock (_dbLock)
+            {
+                var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT name FROM app_categories
+                        UNION
+                        SELECT DISTINCT app FROM tickets WHERE app IS NOT NULL AND trim(app) != '';
+                    ";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        if (!reader.IsDBNull(0))
+                        {
+                            string val = reader.GetString(0).Trim();
+                            if (!string.IsNullOrEmpty(val))
+                            {
+                                set.Add(val);
+                            }
+                        }
+                    }
+                }
+                catch { }
+                return set.OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
             }
         }
 

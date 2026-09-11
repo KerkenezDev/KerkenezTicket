@@ -34,6 +34,7 @@ namespace KerkenezTicket.UI
 
             _configService = configService ?? new ConfigService();
             _dbService = new TicketDatabaseService();
+            _configService.SyncKnownApps(_dbService.GetAllAppNames());
 
             InitializeComponent();
 
@@ -65,6 +66,25 @@ namespace KerkenezTicket.UI
                         }
                         catch { }
                     });
+                }
+
+                // First-run: offer to create Desktop & Start Menu shortcuts
+                if (!_configService.Settings.ShortcutsCreated)
+                {
+                    var result = MessageBox.Show(
+                        "Would you like to create Desktop and Start Menu shortcuts for Kerkenez Ticket?\n\nYou can always add or remove them later from Settings.",
+                        "Create Shortcuts",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        ShortcutService.CreateShortcuts();
+                    }
+
+                    // Mark as handled so we never ask again
+                    _configService.Settings.ShortcutsCreated = true;
+                    _configService.SaveConfig(_configService.Settings);
                 }
             };
         }
@@ -322,7 +342,7 @@ namespace KerkenezTicket.UI
             if (index == 0)
             {
                 _ticketsView.BringToFront();
-                _ticketsView.ApplyFilters();
+                _ticketsView.RefreshAll();
                 _ticketsView.ApplySavedSplitterDistance();
             }
             else if (index == 1)

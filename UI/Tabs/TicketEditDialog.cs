@@ -11,6 +11,7 @@ namespace KerkenezTicket.UI.Tabs
     {
         private readonly TicketItem _ticket;
         private readonly ConfigService _configService;
+        private readonly TicketDatabaseService? _dbService;
 
         private TextBox _txtTitle = null!;
         private ComboBox _cboApp = null!;
@@ -25,10 +26,11 @@ namespace KerkenezTicket.UI.Tabs
 
         public TicketItem UpdatedTicket => _ticket;
 
-        public TicketEditDialog(TicketItem ticket, ConfigService configService)
+        public TicketEditDialog(TicketItem ticket, ConfigService configService, TicketDatabaseService? dbService = null)
         {
             _ticket = ticket.Clone();
             _configService = configService;
+            _dbService = dbService;
 
             InitializeComponent();
             PopulateData();
@@ -60,7 +62,7 @@ namespace KerkenezTicket.UI.Tabs
 
             // 2. App & Type (side-by-side)
             var lblApp = new Label { Text = "App", Location = new Point(pad, y + 4), AutoSize = true };
-            _cboApp = new ComboBox { Location = new Point(pad + labelW, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDown };
+            _cboApp = new ComboBox { Location = new Point(pad + labelW, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
             var lblType = new Label { Text = "Type", Location = new Point(pad + labelW + 180, y + 4), AutoSize = true };
             _cboType = new ComboBox { Location = new Point(pad + labelW + 230, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
             this.Controls.Add(lblApp);
@@ -154,7 +156,12 @@ namespace KerkenezTicket.UI.Tabs
             _txtTags.Text = _ticket.TagsSummary;
 
             // Apps
-            foreach (var app in _configService.Settings.KnownApps)
+            var appsList = _dbService != null ? _dbService.GetAllAppNames() : _configService.Settings.KnownApps;
+            var allApps = appsList.Union(_configService.Settings.KnownApps, StringComparer.OrdinalIgnoreCase)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var app in allApps)
             {
                 _cboApp.Items.Add(app);
             }
@@ -193,11 +200,12 @@ namespace KerkenezTicket.UI.Tabs
             }
 
             _ticket.Title = _txtTitle.Text.Trim();
-            string editApp = !string.IsNullOrWhiteSpace(_cboApp.Text)
-                ? _cboApp.Text.Trim()
-                : (_cboApp.SelectedItem?.ToString() ?? "general");
+            string editApp = _cboApp.SelectedItem?.ToString() ?? "general";
             if (string.IsNullOrWhiteSpace(editApp)) editApp = "general";
             _ticket.App = editApp;
+
+            _dbService?.EnsureAppCategoryExists(editApp);
+            _configService.SyncKnownApps(new[] { editApp });
             _ticket.TicketType = _cboType.SelectedItem?.ToString() ?? "Bug";
             _ticket.Priority = TicketPriorityExtensions.ParsePriority(_cboPriority.SelectedItem?.ToString());
             _ticket.Status = TicketStatusExtensions.ParseStatus(_cboStatus.SelectedItem?.ToString());

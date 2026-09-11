@@ -46,6 +46,9 @@ namespace KerkenezTicket
             // 2. Health check and register/heal HKCU Uninstall registry key on every startup
             UninstallRegistrationService.RegisterOrHeal();
 
+            // 3. Health check existing shortcuts (heal target paths if exe moved, don't recreate deleted ones)
+            ShortcutService.HealShortcuts();
+
             // Single instance mutex
             using var mainMutex = new Mutex(true, MainUiMutexName, out bool createdNew);
             if (!createdNew)

@@ -68,6 +68,9 @@ namespace KerkenezTicket.Models
         public bool AutoBackupOnExit { get; set; } = false;
         public int MaxBackupsToRetain { get; set; } = 10;
 
+        // Shortcuts (Desktop + Start Menu)
+        public bool ShortcutsCreated { get; set; } = false;
+
         public static AppSettings CreateDefault()
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -104,7 +107,8 @@ namespace KerkenezTicket.Models
                 DatabasePath = defaultDbPath,
                 BackupDirectory = defaultBackupDir,
                 AutoBackupOnExit = false,
-                MaxBackupsToRetain = 10
+                MaxBackupsToRetain = 10,
+                ShortcutsCreated = false
             };
         }
     }

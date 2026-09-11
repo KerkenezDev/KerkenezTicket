@@ -273,9 +273,81 @@ namespace KerkenezTicket.UI.Tabs
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
                 ForeColor = Color.FromArgb(108, 117, 125),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 4)
+                Margin = new Padding(0, 0, 0, 14)
             };
             cardUi.Controls.Add(_lblScalePreview);
+
+            // Shortcuts Section
+            var lblShortcuts = new Label
+            {
+                Text = "Desktop & Start Menu Shortcuts:",
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                AutoSize = true,
+                Margin = new Padding(0, 4, 0, 6)
+            };
+            cardUi.Controls.Add(lblShortcuts);
+
+            var rowShortcuts = new FlowLayoutPanel
+            {
+                Width = CardWidth - 48,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            var btnCreateShortcuts = new Button
+            {
+                Text = "📌  Create Desktop & Start Menu Shortcuts",
+                AutoSize = true,
+                Height = 30,
+                Padding = new Padding(12, 0, 12, 0),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = Color.FromArgb(0, 102, 204),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 10, 0)
+            };
+            btnCreateShortcuts.FlatAppearance.BorderColor = Color.FromArgb(190, 210, 235);
+            btnCreateShortcuts.Click += (s, e) =>
+            {
+                bool ok = ShortcutService.CreateShortcuts();
+                if (ok)
+                {
+                    _configService.Settings.ShortcutsCreated = true;
+                    _configService.SaveConfig(_configService.Settings);
+                    _lblSaveToast.Text = "✓ Desktop and Start Menu shortcuts created!";
+                }
+                else
+                {
+                    _lblSaveToast.Text = "⚠️ Could not create shortcuts.";
+                }
+            };
+
+            var btnRemoveShortcuts = new Button
+            {
+                Text = "🗑️  Remove Shortcuts",
+                AutoSize = true,
+                Height = 30,
+                Padding = new Padding(12, 0, 12, 0),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F),
+                BackColor = Color.FromArgb(254, 242, 242),
+                ForeColor = Color.FromArgb(220, 38, 38),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 0, 0)
+            };
+            btnRemoveShortcuts.FlatAppearance.BorderColor = Color.FromArgb(252, 165, 165);
+            btnRemoveShortcuts.Click += (s, e) =>
+            {
+                ShortcutService.RemoveShortcuts();
+                _lblSaveToast.Text = "✓ Shortcuts removed.";
+            };
+
+            rowShortcuts.Controls.Add(btnCreateShortcuts);
+            rowShortcuts.Controls.Add(btnRemoveShortcuts);
+            cardUi.Controls.Add(rowShortcuts);
 
             mainFlow.Controls.Add(cardUi);
 
@@ -828,7 +900,13 @@ kticket register"
 
             // Apps
             _cboDefaultApp.Items.Clear();
-            foreach (var app in s.KnownApps)
+            var dbApps = _dbService.GetAllAppNames();
+            _configService.SyncKnownApps(dbApps);
+            var allApps = dbApps.Union(s.KnownApps, StringComparer.OrdinalIgnoreCase)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var app in allApps)
             {
                 _cboDefaultApp.Items.Add(app);
             }

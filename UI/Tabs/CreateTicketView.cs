@@ -96,9 +96,9 @@ namespace KerkenezTicket.UI.Tabs
             int colWidth = (innerWidth - 20) / 2; // two columns
 
             // 1. Title
-            var pnlTitle = new Panel { Width = innerWidth, Height = 64, Margin = new Padding(0, 0, 0, 8) };
+            var pnlTitle = new Panel { Width = innerWidth, Height = 68, Margin = new Padding(0, 0, 0, 10) };
             var lblT = new Label { Text = "Ticket Title *", Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(35, 40, 50), AutoSize = true, Location = new Point(0, 0) };
-            _txtTitle = new TextBox { Width = innerWidth, Height = 30, Font = new Font("Segoe UI", 10F), Location = new Point(0, 22) };
+            _txtTitle = new TextBox { Width = innerWidth, Height = 30, Font = new Font("Segoe UI", 10F), Location = new Point(0, 26) };
             pnlTitle.Controls.Add(lblT);
             pnlTitle.Controls.Add(_txtTitle);
             card.Controls.Add(pnlTitle);
@@ -110,11 +110,11 @@ namespace KerkenezTicket.UI.Tabs
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Margin = new Padding(0, 0, 0, 4)
+                Margin = new Padding(0, 0, 0, 6)
             };
 
-            _cboApp = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown, Font = new Font("Segoe UI", 9F), Height = 28 };
-            var fieldApp = CreateFormField("Target Application:", "Select or enter which project/app this ticket belongs to", _cboApp, colWidth);
+            _cboApp = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Height = 28 };
+            var fieldApp = CreateFormField("Target Application:", "Select which project/app this ticket belongs to", _cboApp, colWidth);
 
             _cboType = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Height = 28 };
             var fieldType = CreateFormField("Ticket Type:", "Bug report, feature request, sync task, etc.", _cboType, colWidth);
@@ -130,7 +130,7 @@ namespace KerkenezTicket.UI.Tabs
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Margin = new Padding(0, 0, 0, 4)
+                Margin = new Padding(0, 0, 0, 6)
             };
 
             _cboPriority = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Height = 28 };
@@ -146,15 +146,15 @@ namespace KerkenezTicket.UI.Tabs
             card.Controls.Add(row2);
 
             // 4. Tags
-            var pnlTags = new Panel { Width = innerWidth, Height = 64, Margin = new Padding(0, 0, 0, 8) };
+            var pnlTags = new Panel { Width = innerWidth, Height = 66, Margin = new Padding(0, 0, 0, 10) };
             var lblTags = new Label { Text = "Tags (comma-separated):", Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(35, 40, 50), AutoSize = true, Location = new Point(0, 0) };
-            _txtTags = new TextBox { Width = innerWidth, Height = 28, Font = new Font("Segoe UI", 9F), PlaceholderText = "e.g. sync, refresh, ui, error", Location = new Point(0, 22) };
+            _txtTags = new TextBox { Width = innerWidth, Height = 28, Font = new Font("Segoe UI", 9F), PlaceholderText = "e.g. sync, refresh, ui, error", Location = new Point(0, 26) };
             pnlTags.Controls.Add(lblTags);
             pnlTags.Controls.Add(_txtTags);
             card.Controls.Add(pnlTags);
 
             // 5. Description
-            var pnlDesc = new Panel { Width = innerWidth, Height = 162, Margin = new Padding(0, 0, 0, 8) };
+            var pnlDesc = new Panel { Width = innerWidth, Height = 170, Margin = new Padding(0, 0, 0, 10) };
             var lblDesc = new Label { Text = "Description:", Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(35, 40, 50), AutoSize = true, Location = new Point(0, 0) };
             _txtDescription = new TextBox
             {
@@ -163,14 +163,14 @@ namespace KerkenezTicket.UI.Tabs
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Segoe UI", 9.5F),
-                Location = new Point(0, 22)
+                Location = new Point(0, 26)
             };
             pnlDesc.Controls.Add(lblDesc);
             pnlDesc.Controls.Add(_txtDescription);
             card.Controls.Add(pnlDesc);
 
             // 6. Notes
-            var pnlNotes = new Panel { Width = innerWidth, Height = 105, Margin = new Padding(0, 0, 0, 16) };
+            var pnlNotes = new Panel { Width = innerWidth, Height = 112, Margin = new Padding(0, 0, 0, 16) };
             var lblNotes = new Label { Text = "Initial Work Notes / Links:", Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(35, 40, 50), AutoSize = true, Location = new Point(0, 0) };
             _txtNotes = new TextBox
             {
@@ -179,7 +179,7 @@ namespace KerkenezTicket.UI.Tabs
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
                 Font = new Font("Segoe UI", 9F),
-                Location = new Point(0, 22)
+                Location = new Point(0, 26)
             };
             pnlNotes.Controls.Add(lblNotes);
             pnlNotes.Controls.Add(_txtNotes);
@@ -272,8 +272,8 @@ namespace KerkenezTicket.UI.Tabs
             var pnl = new Panel
             {
                 Width = width,
-                Height = 78,
-                Margin = new Padding(0, 0, 16, 10)
+                Height = 84,
+                Margin = new Padding(0, 0, 16, 8)
             };
 
             var lblT = new Label
@@ -282,10 +282,10 @@ namespace KerkenezTicket.UI.Tabs
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(35, 40, 50),
                 AutoSize = true,
-                Location = new Point(0, 2)
+                Location = new Point(0, 0)
             };
 
-            control.Location = new Point(0, 24);
+            control.Location = new Point(0, 26);
             control.Width = width;
 
             var lblS = new Label
@@ -294,7 +294,7 @@ namespace KerkenezTicket.UI.Tabs
                 Font = new Font("Segoe UI", 8F),
                 ForeColor = Color.FromArgb(120, 125, 135),
                 AutoSize = true,
-                Location = new Point(0, 54)
+                Location = new Point(0, 58)
             };
 
             pnl.Controls.Add(lblT);
@@ -312,13 +312,22 @@ namespace KerkenezTicket.UI.Tabs
             _lblStatusMsg.Text = "";
 
             _cboApp.Items.Clear();
-            foreach (var app in _configService.Settings.KnownApps)
+            var dbApps = _dbService.GetAllAppNames();
+            _configService.SyncKnownApps(dbApps);
+            var allApps = dbApps.Union(_configService.Settings.KnownApps, StringComparer.OrdinalIgnoreCase)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var app in allApps)
             {
                 _cboApp.Items.Add(app);
             }
-            if (!string.IsNullOrWhiteSpace(_configService.Settings.DefaultApp))
+
+            if (!string.IsNullOrWhiteSpace(_configService.Settings.DefaultApp) &&
+                _cboApp.Items.Contains(_configService.Settings.DefaultApp))
             {
-                _cboApp.Text = _configService.Settings.DefaultApp;
+                _cboApp.SelectedItem = _configService.Settings.DefaultApp;
             }
             else if (_cboApp.Items.Count > 0)
             {
@@ -326,7 +335,7 @@ namespace KerkenezTicket.UI.Tabs
             }
             else
             {
-                _cboApp.Text = "";
+                _cboApp.SelectedIndex = -1;
             }
 
             _cboType.Items.Clear();
@@ -352,10 +361,11 @@ namespace KerkenezTicket.UI.Tabs
                 return;
             }
 
-            string selectedApp = !string.IsNullOrWhiteSpace(_cboApp.Text)
-                ? _cboApp.Text.Trim()
-                : (_cboApp.SelectedItem?.ToString() ?? "general");
+            string selectedApp = _cboApp.SelectedItem?.ToString() ?? "general";
             if (string.IsNullOrWhiteSpace(selectedApp)) selectedApp = "general";
+
+            _dbService.EnsureAppCategoryExists(selectedApp);
+            _configService.SyncKnownApps(new[] { selectedApp });
 
             var ticket = new TicketItem
             {
