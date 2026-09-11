@@ -27,6 +27,22 @@ namespace KerkenezTicket.UI.Tabs
         private string _selectedAppFilter = "all";
         private string _selectedTypeFilter = "all";
 
+        // Column Sorting State
+        private enum SortState
+        {
+            Default = 0,
+            Descending = 1,
+            Ascending = 2
+        }
+
+        private int _sortColumn = -1;
+        private SortState _sortState = SortState.Default;
+
+        private static readonly string[] TicketColumnTitles = new[]
+        {
+            "ID", "Priority", "App", "Type", "Title", "Updated"
+        };
+
         // Master-Detail Split
         private SplitContainer _split = null!;
         private ListView _lvTickets = null!;
@@ -278,6 +294,7 @@ namespace KerkenezTicket.UI.Tabs
             _lvTickets.Columns.Add("Updated", 75);
             _lvTickets.SelectedIndexChanged += OnTicketSelectionChanged;
             _lvTickets.ColumnWidthChanged += OnLvTicketsColumnWidthChanged;
+            _lvTickets.ColumnClick += OnTicketColumnClick;
             RestoreTicketColumnWidths();
 
             pnlListHolder.Controls.Add(_lvTickets);
@@ -448,9 +465,9 @@ namespace KerkenezTicket.UI.Tabs
             _txtNewNote = new TextBox
             {
                 Width = 460,
-                Height = 28,
                 Font = new Font("Segoe UI", 9F),
-                PlaceholderText = "Add a quick update note to this ticket..."
+                PlaceholderText = "Add a quick update note to this ticket...",
+                Margin = new Padding(0)
             };
             _txtNewNote.KeyDown += (s, e) =>
             {
@@ -463,13 +480,13 @@ namespace KerkenezTicket.UI.Tabs
 
             _btnAddNote = new Button
             {
-                Text = "+ Log Note",
-                Width = 90,
-                Height = 28,
+                Text = "+ Log",
+                Width = 92,
+                Height = _txtNewNote.PreferredHeight > 0 ? _txtNewNote.PreferredHeight : 30,
                 BackColor = Color.FromArgb(0, 102, 204),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Cursor = Cursors.Hand,
                 Margin = new Padding(8, 0, 0, 0)
             };
@@ -495,6 +512,10 @@ namespace KerkenezTicket.UI.Tabs
                 _txtDetailDescription.Width = cardW - 32;
                 _txtDetailNotes.Width = cardW - 32;
                 _txtNewNote.Width = Math.Max(150, cardW - 132);
+                if (_txtNewNote.PreferredHeight > 0)
+                {
+                    _btnAddNote.Height = _txtNewNote.PreferredHeight;
+                }
             };
         }
 
@@ -632,6 +653,39 @@ namespace KerkenezTicket.UI.Tabs
 
             _loadedTickets = _dbService.GetFilteredTickets(app, type, _selectedStatusFilter, search);
 
+            if (_sortColumn >= 0 && _sortState != SortState.Default)
+            {
+                bool desc = (_sortState == SortState.Descending);
+                _loadedTickets = _sortColumn switch
+                {
+                    0 => desc // ID
+                        ? _loadedTickets.OrderByDescending(t => t.TicketNumber).ThenByDescending(t => t.Id).ToList()
+                        : _loadedTickets.OrderBy(t => t.TicketNumber).ThenBy(t => t.Id).ToList(),
+
+                    1 => desc // Priority (Urgent > High > Medium > Low)
+                        ? _loadedTickets.OrderByDescending(t => (int)t.Priority).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => (int)t.Priority).ThenBy(t => t.TicketNumber).ToList(),
+
+                    2 => desc // App
+                        ? _loadedTickets.OrderByDescending(t => t.App, StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => t.App, StringComparer.OrdinalIgnoreCase).ThenBy(t => t.TicketNumber).ToList(),
+
+                    3 => desc // Type
+                        ? _loadedTickets.OrderByDescending(t => t.TicketType, StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => t.TicketType, StringComparer.OrdinalIgnoreCase).ThenBy(t => t.TicketNumber).ToList(),
+
+                    4 => desc // Title
+                        ? _loadedTickets.OrderByDescending(t => t.Title, StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase).ThenBy(t => t.TicketNumber).ToList(),
+
+                    5 => desc // Updated
+                        ? _loadedTickets.OrderByDescending(t => t.UpdatedAt).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => t.UpdatedAt).ThenBy(t => t.TicketNumber).ToList(),
+
+                    _ => _loadedTickets
+                };
+            }
+
             _lvTickets.BeginUpdate();
             _lvTickets.Items.Clear();
             _lvTickets.Groups.Clear();
@@ -658,10 +712,13 @@ namespace KerkenezTicket.UI.Tabs
             {
                 var dbApps = _dbService.GetAllAppNames();
                 var allApps = dbApps.Union(_configService.Settings.KnownApps, StringComparer.OrdinalIgnoreCase)
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+                    .Where(x => !string.IsNullOrWhiteSpace(x));
 
-                foreach (var a in allApps)
+                var orderedApps = (_sortColumn == 2 && _sortState == SortState.Descending)
+                    ? allApps.OrderByDescending(x => x, StringComparer.OrdinalIgnoreCase)
+                    : allApps.OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var a in orderedApps)
                 {
                     var grp = new ListViewGroup(a, $"📱  {a}");
                     groupMap[a.ToLowerInvariant()] = grp;
@@ -1038,6 +1095,61 @@ namespace KerkenezTicket.UI.Tabs
             if (dict.TryGetValue("Type", out int wType) && wType > 30) _lvTickets.Columns[3].Width = wType;
             if (dict.TryGetValue("Title", out int wTitle) && wTitle > 30) _lvTickets.Columns[4].Width = wTitle;
             if (dict.TryGetValue("Updated", out int wUpd) && wUpd > 30) _lvTickets.Columns[5].Width = wUpd;
+        }
+
+        private void OnTicketColumnClick(object? sender, ColumnClickEventArgs e)
+        {
+            int col = e.Column;
+            if (col < 0 || col >= TicketColumnTitles.Length) return;
+
+            if (_sortColumn != col)
+            {
+                _sortColumn = col;
+                _sortState = SortState.Descending;
+            }
+            else
+            {
+                _sortState = _sortState switch
+                {
+                    SortState.Descending => SortState.Ascending,
+                    SortState.Ascending => SortState.Default,
+                    _ => SortState.Descending
+                };
+
+                if (_sortState == SortState.Default)
+                {
+                    _sortColumn = -1;
+                }
+            }
+
+            UpdateColumnHeaderSortIndicators();
+            ApplyFilters();
+        }
+
+        private void UpdateColumnHeaderSortIndicators()
+        {
+            for (int i = 0; i < TicketColumnTitles.Length && i < _lvTickets.Columns.Count; i++)
+            {
+                if (i == _sortColumn)
+                {
+                    if (_sortState == SortState.Descending)
+                    {
+                        _lvTickets.Columns[i].Text = $"{TicketColumnTitles[i]} ▼";
+                    }
+                    else if (_sortState == SortState.Ascending)
+                    {
+                        _lvTickets.Columns[i].Text = $"{TicketColumnTitles[i]} ▲";
+                    }
+                    else
+                    {
+                        _lvTickets.Columns[i].Text = TicketColumnTitles[i];
+                    }
+                }
+                else
+                {
+                    _lvTickets.Columns[i].Text = TicketColumnTitles[i];
+                }
+            }
         }
     }
 }

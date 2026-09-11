@@ -25,6 +25,22 @@ namespace KerkenezTicket.UI.Tabs
         private ListView _lvApps = null!;
         private ListView _lvTypes = null!;
 
+        // Column Sorting State
+        private enum SortState
+        {
+            Default = 0,
+            Descending = 1,
+            Ascending = 2
+        }
+
+        private int _sortColumnApps = -1;
+        private SortState _sortStateApps = SortState.Default;
+
+        private static readonly string[] AppsColumnTitles = new[]
+        {
+            "App Key", "Display Name", "Open", "Total", "Description"
+        };
+
         // ================= Right Form: Apps =================
         private Panel _pnlRightHolder = null!;
         private FlowLayoutPanel _cardApp = null!;
@@ -291,6 +307,7 @@ namespace KerkenezTicket.UI.Tabs
             _lvApps.Columns.Add("Description", 200);
             _lvApps.SelectedIndexChanged += OnAppSelectionChanged;
             _lvApps.ColumnWidthChanged += OnLvAppsColumnWidthChanged;
+            _lvApps.ColumnClick += OnAppsColumnClick;
             RestoreAppsColumnWidths();
 
             // 2b. Types ListView
@@ -623,6 +640,35 @@ namespace KerkenezTicket.UI.Tabs
             _lvApps.Items.Clear();
             var categories = _dbService.GetAppCategories();
 
+            if (_sortColumnApps >= 0 && _sortStateApps != SortState.Default)
+            {
+                bool desc = (_sortStateApps == SortState.Descending);
+                categories = _sortColumnApps switch
+                {
+                    0 => desc // App Key
+                        ? categories.OrderByDescending(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList()
+                        : categories.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+
+                    1 => desc // Display Name
+                        ? categories.OrderByDescending(a => a.DisplayName, StringComparer.OrdinalIgnoreCase).ToList()
+                        : categories.OrderBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase).ToList(),
+
+                    2 => desc // Open count
+                        ? categories.OrderByDescending(a => a.OpenCount).ThenBy(a => a.Name).ToList()
+                        : categories.OrderBy(a => a.OpenCount).ThenBy(a => a.Name).ToList(),
+
+                    3 => desc // Total count
+                        ? categories.OrderByDescending(a => a.TotalCount).ThenBy(a => a.Name).ToList()
+                        : categories.OrderBy(a => a.TotalCount).ThenBy(a => a.Name).ToList(),
+
+                    4 => desc // Description
+                        ? categories.OrderByDescending(a => a.Description, StringComparer.OrdinalIgnoreCase).ToList()
+                        : categories.OrderBy(a => a.Description, StringComparer.OrdinalIgnoreCase).ToList(),
+
+                    _ => categories
+                };
+            }
+
             foreach (var app in categories)
             {
                 var lvi = new ListViewItem(app.Name);
@@ -810,6 +856,61 @@ namespace KerkenezTicket.UI.Tabs
             if (dict.TryGetValue("Open", out int wOpen) && wOpen > 30) _lvApps.Columns[2].Width = wOpen;
             if (dict.TryGetValue("Total", out int wTot) && wTot > 30) _lvApps.Columns[3].Width = wTot;
             if (dict.TryGetValue("Desc", out int wDesc) && wDesc > 30) _lvApps.Columns[4].Width = wDesc;
+        }
+
+        private void OnAppsColumnClick(object? sender, ColumnClickEventArgs e)
+        {
+            int col = e.Column;
+            if (col < 0 || col >= AppsColumnTitles.Length) return;
+
+            if (_sortColumnApps != col)
+            {
+                _sortColumnApps = col;
+                _sortStateApps = SortState.Descending;
+            }
+            else
+            {
+                _sortStateApps = _sortStateApps switch
+                {
+                    SortState.Descending => SortState.Ascending,
+                    SortState.Ascending => SortState.Default,
+                    _ => SortState.Descending
+                };
+
+                if (_sortStateApps == SortState.Default)
+                {
+                    _sortColumnApps = -1;
+                }
+            }
+
+            UpdateAppsColumnHeaderSortIndicators();
+            LoadApps();
+        }
+
+        private void UpdateAppsColumnHeaderSortIndicators()
+        {
+            for (int i = 0; i < AppsColumnTitles.Length && i < _lvApps.Columns.Count; i++)
+            {
+                if (i == _sortColumnApps)
+                {
+                    if (_sortStateApps == SortState.Descending)
+                    {
+                        _lvApps.Columns[i].Text = $"{AppsColumnTitles[i]} ▼";
+                    }
+                    else if (_sortStateApps == SortState.Ascending)
+                    {
+                        _lvApps.Columns[i].Text = $"{AppsColumnTitles[i]} ▲";
+                    }
+                    else
+                    {
+                        _lvApps.Columns[i].Text = AppsColumnTitles[i];
+                    }
+                }
+                else
+                {
+                    _lvApps.Columns[i].Text = AppsColumnTitles[i];
+                }
+            }
         }
     }
 }
