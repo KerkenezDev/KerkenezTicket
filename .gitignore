@@ -1,0 +1,34 @@
+## .NET and Build Artifacts
+[Bb]in/
+[Oo]bj/
+publish/
+dist/
+
+## Visual Studio and IDE files
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosv
+*.userprefs
+*.sln.docstates
+
+## Local Scratch and Temporary Files
+scratch/
+*.log
+*.tmp
+*.bak
+*.swp
+
+## SQLite Local Databases and Backups
+*.db
+*.db-shm
+*.db-wal
+*.ktbackup
+
+## Windows OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

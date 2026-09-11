@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/cli/">
+    <Project Path="cli/KTicketCli.csproj" />
+  </Folder>
+  <Project Path="KerkenezTicket.csproj" />
+</Solution>
