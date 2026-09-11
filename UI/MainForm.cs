@@ -248,7 +248,6 @@ namespace KerkenezTicket.UI
             _sidebar = new SidebarNav();
             _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += (s, index) => ShowTab(index);
-            _sidebar.LiveLogsClicked += (s, e) => ShowTab(4);
             _sidebar.CollapsedChanged += (s, isCollapsed) =>
             {
                 _configService.Settings.CollapseSidebarByDefault = isCollapsed;
@@ -324,7 +323,7 @@ namespace KerkenezTicket.UI
 
         private void ShowTab(int index)
         {
-            if (index >= 0 && index < 4)
+            if (index >= 0 && index < 5)
             {
                 _sidebar.SelectedIndex = index;
             }

@@ -22,7 +22,8 @@ namespace KerkenezTicket.UI.Controls
             "Tickets",
             "New Ticket",
             "Apps & Types",
-            "Settings"
+            "Settings",
+            "Live Logs"
         };
 
         private readonly string[] _tabIcons = new[]
@@ -30,7 +31,8 @@ namespace KerkenezTicket.UI.Controls
             "\uE8A5", // Tickets / tasks
             "\uE710", // Plus / New
             "\uE71D", // Apps / categories
-            "\uE713"  // Settings gear
+            "\uE713", // Settings gear
+            "\uE753"  // Cloud icon (matching KerkenezMail)
         };
 
         private static string? _iconFontFamily;
@@ -53,7 +55,6 @@ namespace KerkenezTicket.UI.Controls
         private int _selectedIndex = 0;
         private int _hoveredIndex = -1;
         private bool _isToggleHovered = false;
-        private bool _isLiveLogsHovered = false;
         private bool _isCollapsed = false;
 
         private readonly System.Windows.Forms.Timer _animTimer;
@@ -80,11 +81,18 @@ namespace KerkenezTicket.UI.Controls
             get => _selectedIndex;
             set
             {
-                if (_selectedIndex != value && value >= 0 && value < _tabTitles.Length)
+                if (_selectedIndex != value && (value == -1 || (value >= 0 && value < _tabTitles.Length)))
                 {
                     _selectedIndex = value;
                     Invalidate();
-                    TabChanged?.Invoke(this, _selectedIndex);
+                    if (_selectedIndex >= 0)
+                    {
+                        TabChanged?.Invoke(this, _selectedIndex);
+                        if (_selectedIndex == 4)
+                        {
+                            LiveLogsClicked?.Invoke(this, EventArgs.Empty);
+                        }
+                    }
                 }
             }
         }
@@ -177,34 +185,30 @@ namespace KerkenezTicket.UI.Controls
             }
         }
 
+        protected override void OnResize(EventArgs eventargs)
+        {
+            base.OnResize(eventargs);
+            Invalidate();
+        }
+
         private Rectangle GetTabRect(int index)
         {
             float scale = CurrentScale;
-            int topOffset = (int)(62 * scale);
             int itemHeight = (int)(44 * scale);
             int marginX = _isCollapsed ? (int)(6 * scale) : (int)(10 * scale);
             int width = this.Width - (marginX * 2);
 
+            if (index == 4) // Live Logs - sits at the bottom of the left menu
+            {
+                int marginY = (int)(12 * scale);
+                int y = this.Height - itemHeight - marginY;
+                int topLimit = (int)(62 * scale) + (4 * (itemHeight + (int)(4 * scale))) + (int)(16 * scale);
+                if (y < topLimit) y = topLimit;
+                return new Rectangle(marginX, y, width, itemHeight);
+            }
+
+            int topOffset = (int)(62 * scale);
             return new Rectangle(marginX, topOffset + (index * (itemHeight + (int)(4 * scale))), width, itemHeight);
-        }
-
-        private Rectangle GetLiveLogsRect()
-        {
-            float scale = CurrentScale;
-            int btnH = (int)(38 * scale);
-            int marginY = (int)(12 * scale);
-            int y = Math.Max((int)(70 * scale) + (_tabTitles.Length * (int)(48 * scale)), this.Height - btnH - marginY);
-
-            if (_isCollapsed)
-            {
-                int sz = (int)(38 * scale);
-                return new Rectangle((this.Width - sz) / 2, y, sz, sz);
-            }
-            else
-            {
-                int marginX = (int)(10 * scale);
-                return new Rectangle(marginX, y, this.Width - (marginX * 2), btnH);
-            }
         }
 
         private void OnMouseMoveHandler(object? sender, MouseEventArgs e)
@@ -214,14 +218,6 @@ namespace KerkenezTicket.UI.Controls
             if (toggleHover != _isToggleHovered)
             {
                 _isToggleHovered = toggleHover;
-                Invalidate();
-            }
-
-            var logsRect = GetLiveLogsRect();
-            bool logsHover = logsRect.Contains(e.Location);
-            if (logsHover != _isLiveLogsHovered)
-            {
-                _isLiveLogsHovered = logsHover;
                 Invalidate();
             }
 
@@ -249,14 +245,6 @@ namespace KerkenezTicket.UI.Controls
                         _toolTip.SetToolTip(this, text);
                     }
                 }
-                else if (_isCollapsed && logsHover)
-                {
-                    if (_currentToolTipText != "Live Logs")
-                    {
-                        _currentToolTipText = "Live Logs";
-                        _toolTip.SetToolTip(this, "Live Logs");
-                    }
-                }
                 else
                 {
                     _currentToolTipText = "";
@@ -269,7 +257,6 @@ namespace KerkenezTicket.UI.Controls
         {
             _hoveredIndex = -1;
             _isToggleHovered = false;
-            _isLiveLogsHovered = false;
             _currentToolTipText = "";
             _toolTip.RemoveAll();
             Invalidate();
@@ -282,12 +269,6 @@ namespace KerkenezTicket.UI.Controls
             if (GetToggleRect().Contains(e.Location))
             {
                 IsCollapsed = !IsCollapsed;
-                return;
-            }
-
-            if (GetLiveLogsRect().Contains(e.Location))
-            {
-                LiveLogsClicked?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
@@ -358,7 +339,16 @@ namespace KerkenezTicket.UI.Controls
                 }
             }
 
-            // 3. Tab Items
+            // 3. Separator line above bottom tab
+            var bottomTabRect = GetTabRect(4);
+            using (var sepPen = new Pen(_borderColor, 1))
+            {
+                int sepY = bottomTabRect.Top - (int)(8 * scale);
+                int sepMargin = isWide ? (int)(12 * scale) : (int)(8 * scale);
+                g.DrawLine(sepPen, sepMargin, sepY, this.Width - sepMargin, sepY);
+            }
+
+            // 4. Tab Items
             for (int i = 0; i < _tabTitles.Length; i++)
             {
                 var rect = GetTabRect(i);
@@ -423,43 +413,6 @@ namespace KerkenezTicket.UI.Controls
                     };
                     g.DrawString(_tabTitles[i], textFont, textBrush, textRect, textSf);
                 }
-            }
-
-            // 4. Bottom Live Logs Button
-            var liveRect = GetLiveLogsRect();
-            using (var sepPen = new Pen(_borderColor, 1))
-            {
-                int sepY = liveRect.Top - (int)(8 * scale);
-                g.DrawLine(sepPen, _isCollapsed ? (int)(8 * scale) : (int)(12 * scale), sepY, this.Width - (_isCollapsed ? (int)(8 * scale) : (int)(12 * scale)), sepY);
-            }
-
-            using (var liveBgBrush = new SolidBrush(_isLiveLogsHovered ? Color.FromArgb(224, 228, 235) : Color.FromArgb(236, 239, 244)))
-            using (var liveBorderPen = new Pen(_borderColor, 1))
-            using (var livePath = GetRoundedRect(liveRect, 5))
-            {
-                g.FillPath(liveBgBrush, livePath);
-                g.DrawPath(liveBorderPen, livePath);
-            }
-
-            if (isWide)
-            {
-                using var logFont = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-                using var logBrush = new SolidBrush(Color.FromArgb(45, 50, 60));
-                using var dotBrush = new SolidBrush(Color.FromArgb(46, 160, 67));
-
-                g.FillEllipse(dotBrush, new Rectangle(liveRect.Left + (int)(12 * scale), liveRect.Top + (liveRect.Height - (int)(8 * scale)) / 2, (int)(8 * scale), (int)(8 * scale)));
-
-                var sfText = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
-                g.DrawString("Live Logs", logFont, logBrush, new Rectangle(liveRect.Left + (int)(26 * scale), liveRect.Top, liveRect.Width - (int)(30 * scale), liveRect.Height), sfText);
-            }
-            else
-            {
-                using var iconFont = new Font(iconFamily, 11F);
-                using var brush = new SolidBrush(_textColor);
-                using var dotBrush = new SolidBrush(Color.FromArgb(46, 160, 67));
-                var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                g.DrawString("\uE7BA", iconFont, brush, liveRect, sfCenter);
-                g.FillEllipse(dotBrush, new Rectangle(liveRect.Right - 8, liveRect.Top + 4, 6, 6));
             }
         }
 
