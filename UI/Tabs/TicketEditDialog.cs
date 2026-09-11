@@ -184,6 +184,7 @@ namespace KerkenezTicket.UI.Tabs
             _cboPriority.SelectedItem = _ticket.Priority.ToDisplayName();
 
             // Status
+            _cboStatus.Items.Add("Backlog");
             _cboStatus.Items.Add("To Do");
             _cboStatus.Items.Add("Doing");
             _cboStatus.Items.Add("Done");

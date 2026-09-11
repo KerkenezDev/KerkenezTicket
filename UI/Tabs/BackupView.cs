@@ -310,7 +310,7 @@ namespace KerkenezTicket.UI.Tabs
             }
 
             var stats = _dbService.GetStatistics();
-            _lblDbTickets.Text = $"🎟️ Total Stored Tickets: {stats.Total} (Todo: {stats.Todo} • Doing: {stats.Doing} • Done: {stats.Done} • Killed: {stats.Killed})";
+            _lblDbTickets.Text = $"🎟️ Total Stored Tickets: {stats.Total} (Backlog: {stats.Backlog} • Todo: {stats.Todo} • Doing: {stats.Doing} • Done: {stats.Done} • Killed: {stats.Killed})";
         }
 
         public void LoadExistingBackups()

@@ -487,7 +487,7 @@ namespace KerkenezTicket.Services
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
                     SELECT a.name, a.display_name, a.color_hex, a.description,
-                           COALESCE(SUM(CASE WHEN t.status IN ('todo', 'doing') THEN 1 ELSE 0 END), 0) as open_count,
+                           COALESCE(SUM(CASE WHEN t.status IN ('backlog', 'todo', 'doing') THEN 1 ELSE 0 END), 0) as open_count,
                            COUNT(t.id) as total_count
                     FROM app_categories a
                     LEFT JOIN tickets t ON lower(t.app) = lower(a.name)
@@ -600,7 +600,7 @@ namespace KerkenezTicket.Services
             }
         }
 
-        public (int Total, int Todo, int Doing, int Done, int Killed) GetStatistics(string? appFilter = null)
+        public (int Total, int Backlog, int Todo, int Doing, int Done, int Killed) GetStatistics(string? appFilter = null)
         {
             lock (_dbLock)
             {
@@ -610,6 +610,7 @@ namespace KerkenezTicket.Services
                 string sql = @"
                     SELECT
                         COUNT(*),
+                        COALESCE(SUM(CASE WHEN status = 'backlog' THEN 1 ELSE 0 END), 0),
                         COALESCE(SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END), 0),
                         COALESCE(SUM(CASE WHEN status = 'doing' THEN 1 ELSE 0 END), 0),
                         COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0),
@@ -633,11 +634,12 @@ namespace KerkenezTicket.Services
                         Convert.ToInt32(reader.GetInt64(1)),
                         Convert.ToInt32(reader.GetInt64(2)),
                         Convert.ToInt32(reader.GetInt64(3)),
-                        Convert.ToInt32(reader.GetInt64(4))
+                        Convert.ToInt32(reader.GetInt64(4)),
+                        Convert.ToInt32(reader.GetInt64(5))
                     );
                 }
 
-                return (0, 0, 0, 0, 0);
+                return (0, 0, 0, 0, 0, 0);
             }
         }
 

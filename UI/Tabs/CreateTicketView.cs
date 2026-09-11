@@ -138,7 +138,7 @@ namespace KerkenezTicket.UI.Tabs
             var fieldPriority = CreateFormField("Priority Urgency:", "Severity and triage urgency ranking", _cboPriority, colWidth);
 
             _cboStatus = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Height = 28 };
-            _cboStatus.Items.AddRange(new[] { "To Do", "Doing", "Done", "Killed" });
+            _cboStatus.Items.AddRange(new[] { "Backlog", "To Do", "Doing", "Done", "Killed" });
             var fieldStatus = CreateFormField("Initial Workflow Status:", "Initial stage in the triage cycle", _cboStatus, colWidth);
 
             row2.Controls.Add(fieldPriority);

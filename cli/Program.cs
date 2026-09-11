@@ -43,6 +43,15 @@ namespace KerkenezTicket.CLI
                     case "set-status":
                         return HandleStatus(args.Skip(1).ToArray());
 
+                    case "backlog":
+                        return HandleQuickStatus(args.Skip(1).ToArray(), TicketStatus.Backlog);
+
+                    case "todo":
+                        return HandleQuickStatus(args.Skip(1).ToArray(), TicketStatus.Todo);
+
+                    case "doing":
+                        return HandleQuickStatus(args.Skip(1).ToArray(), TicketStatus.Doing);
+
                     case "done":
                     case "resolve":
                     case "close":
@@ -291,6 +300,9 @@ namespace KerkenezTicket.CLI
 
                 switch (t.Status)
                 {
+                    case TicketStatus.Backlog:
+                        Console.ForegroundColor = ConsoleColor.Magenta;
+                        break;
                     case TicketStatus.Todo:
                         Console.ForegroundColor = ConsoleColor.Blue;
                         break;
@@ -332,7 +344,7 @@ namespace KerkenezTicket.CLI
             Console.WriteLine(new string('-', 85));
             var stats = db.GetStatistics(app);
             Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine($"Total: {stats.Total} | Todo: {stats.Todo} | Doing: {stats.Doing} | Done: {stats.Done} | Killed: {stats.Killed}");
+            Console.WriteLine($"Total: {stats.Total} | Backlog: {stats.Backlog} | Todo: {stats.Todo} | Doing: {stats.Doing} | Done: {stats.Done} | Killed: {stats.Killed}");
             Console.ResetColor();
             Console.WriteLine();
 
@@ -392,7 +404,7 @@ namespace KerkenezTicket.CLI
         {
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: kticket status <id|number> <todo|doing|done|killed>");
+                Console.WriteLine("Usage: kticket status <id|number> <backlog|todo|doing|done|killed>");
                 return 1;
             }
 
@@ -492,7 +504,10 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  kticket add \"<title>\" [options]");
             Console.WriteLine("  kticket list [options]");
             Console.WriteLine("  kticket view <id|number>");
-            Console.WriteLine("  kticket status <id|number> <todo|doing|done|killed>");
+            Console.WriteLine("  kticket status <id|number> <backlog|todo|doing|done|killed>");
+            Console.WriteLine("  kticket backlog <id|number>");
+            Console.WriteLine("  kticket todo <id|number>");
+            Console.WriteLine("  kticket doing <id|number>");
             Console.WriteLine("  kticket done <id|number>");
             Console.WriteLine("  kticket kill <id|number>");
             Console.WriteLine("  kticket note <id|number> \"<text>\"");
@@ -507,7 +522,7 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  -p, --priority <level>  urgent | high | medium | low");
             Console.WriteLine("  -t, --type <type>       bug | feature | sync | task | improvement");
             Console.WriteLine("  -d, --desc <text>       Detailed description");
-            Console.WriteLine("  -s, --status <status>   todo | doing | done | killed");
+            Console.WriteLine("  -s, --status <status>   backlog | todo | doing | done | killed");
             Console.WriteLine("  --tag <tags>            Comma-separated tags");
             Console.WriteLine();
             Console.WriteLine("Note/Edit:");

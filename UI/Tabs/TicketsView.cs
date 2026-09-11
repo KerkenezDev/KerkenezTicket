@@ -48,6 +48,7 @@ namespace KerkenezTicket.UI.Tabs
         private Button _btnActionDoing = null!;
         private Button _btnActionDone = null!;
         private Button _btnActionTodo = null!;
+        private Button _btnActionBacklog = null!;
         private Button _btnActionKill = null!;
         private Button _btnActionEdit = null!;
         private Button _btnActionDelete = null!;
@@ -184,16 +185,17 @@ namespace KerkenezTicket.UI.Tabs
             // Status Filter Dropdown
             var lblStatus = new Label { Text = "Status:", AutoSize = true, Margin = new Padding(0, 6, 4, 0), Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(70, 75, 85) };
             _cboStatusFilter = new ComboBox { Width = 115, Height = 28, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 1, 14, 0) };
-            _cboStatusFilter.Items.AddRange(new object[] { "All Statuses", "To Do", "Doing", "Done", "Killed" });
+            _cboStatusFilter.Items.AddRange(new object[] { "All Statuses", "Backlog", "To Do", "Doing", "Done", "Killed" });
             _cboStatusFilter.SelectedIndex = 0;
             _cboStatusFilter.SelectedIndexChanged += (s, e) =>
             {
                 _selectedStatusFilter = _cboStatusFilter.SelectedIndex switch
                 {
-                    1 => TicketStatus.Todo,
-                    2 => TicketStatus.Doing,
-                    3 => TicketStatus.Done,
-                    4 => TicketStatus.Killed,
+                    1 => TicketStatus.Backlog,
+                    2 => TicketStatus.Todo,
+                    3 => TicketStatus.Doing,
+                    4 => TicketStatus.Done,
+                    5 => TicketStatus.Killed,
                     _ => null
                 };
                 LogService.Info("Tickets", $"Filtered status: {_cboStatusFilter.SelectedItem}");
@@ -359,6 +361,7 @@ namespace KerkenezTicket.UI.Tabs
             _btnActionDoing = CreateActionButton("▶  Start Doing", Color.FromArgb(220, 130, 20), (s, e) => ChangeStatus(TicketStatus.Doing));
             _btnActionDone = CreateActionButton("✓  Mark Done", Color.FromArgb(34, 134, 58), (s, e) => ChangeStatus(TicketStatus.Done));
             _btnActionTodo = CreateActionButton("↩  Move to Todo", Color.FromArgb(70, 130, 180), (s, e) => ChangeStatus(TicketStatus.Todo));
+            _btnActionBacklog = CreateActionButton("📋  Move to Backlog", Color.FromArgb(114, 9, 183), (s, e) => ChangeStatus(TicketStatus.Backlog));
             _btnActionKill = CreateActionButton("✕  Kill Ticket", Color.FromArgb(108, 117, 125), (s, e) => ChangeStatus(TicketStatus.Killed));
 
             _btnActionEdit = CreateOutlineButton("✏️ Edit", (s, e) => OnEditClicked());
@@ -368,6 +371,7 @@ namespace KerkenezTicket.UI.Tabs
             _pnlActionButtons.Controls.Add(_btnActionDoing);
             _pnlActionButtons.Controls.Add(_btnActionDone);
             _pnlActionButtons.Controls.Add(_btnActionTodo);
+            _pnlActionButtons.Controls.Add(_btnActionBacklog);
             _pnlActionButtons.Controls.Add(_btnActionKill);
             _pnlActionButtons.Controls.Add(_btnActionEdit);
             _pnlActionButtons.Controls.Add(_btnActionDelete);
@@ -639,12 +643,14 @@ namespace KerkenezTicket.UI.Tabs
             if (string.Equals(grouping, "Status", StringComparison.OrdinalIgnoreCase))
             {
                 groupMap["doing"] = new ListViewGroup("doing", "🟡  In Progress / Doing");
-                groupMap["todo"] = new ListViewGroup("todo", "🔵  To Do / Backlog");
+                groupMap["todo"] = new ListViewGroup("todo", "🔵  To Do");
+                groupMap["backlog"] = new ListViewGroup("backlog", "🟣  Backlog");
                 groupMap["done"] = new ListViewGroup("done", "🟢  Completed / Done");
                 groupMap["killed"] = new ListViewGroup("killed", "⚫  Killed / Cancelled");
 
                 _lvTickets.Groups.Add(groupMap["doing"]);
                 _lvTickets.Groups.Add(groupMap["todo"]);
+                _lvTickets.Groups.Add(groupMap["backlog"]);
                 _lvTickets.Groups.Add(groupMap["done"]);
                 _lvTickets.Groups.Add(groupMap["killed"]);
             }
@@ -744,7 +750,7 @@ namespace KerkenezTicket.UI.Tabs
             // Update bottom status strip metrics
             var stats = _dbService.GetStatistics(app);
             string statusMsg = $"Showing {_loadedTickets.Count} tickets";
-            string metrics = $"Total: {stats.Total} | Todo: {stats.Todo} | Doing: {stats.Doing} | Done: {stats.Done} | Killed: {stats.Killed}";
+            string metrics = $"Total: {stats.Total} | Backlog: {stats.Backlog} | Todo: {stats.Todo} | Doing: {stats.Doing} | Done: {stats.Done} | Killed: {stats.Killed}";
             StatusUpdated?.Invoke(statusMsg, metrics);
         }
 
@@ -829,6 +835,7 @@ namespace KerkenezTicket.UI.Tabs
             _btnActionDoing.Visible = (ticket.Status != TicketStatus.Doing);
             _btnActionDone.Visible = (ticket.Status != TicketStatus.Done);
             _btnActionTodo.Visible = (ticket.Status != TicketStatus.Todo);
+            _btnActionBacklog.Visible = (ticket.Status != TicketStatus.Backlog);
             _btnActionKill.Visible = (ticket.Status != TicketStatus.Killed);
 
             // Dates & Tags
