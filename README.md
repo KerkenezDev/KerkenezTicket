@@ -40,7 +40,27 @@ kticket export my_tickets.json
 
 # 6. Register CLI in user PATH
 kticket register
+
+# 7. Complete uninstallation (removes registry, PATH, CLI, and data)
+kticket uninstall [--yes]
 ```
+
+---
+
+## Uninstallation & Windows Settings Integration
+
+Kerkenez Ticket registers with Windows Settings (`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezTicket`). It automatically health-checks and heals its registry entry and executable path on every startup.
+
+You can uninstall Kerkenez Ticket at any time via:
+- **Windows Settings**: Go to **Settings -> Apps -> Installed Apps**, find **Kerkenez Ticket**, and click **Uninstall**.
+- **Desktop Application Command**: `KerkenezTicket.exe --uninstall` (or `--uninstall --quiet` for silent mode).
+- **CLI Command**: `kticket uninstall` (or `kticket uninstall --yes`).
+
+A complete uninstall cleans:
+1. Windows Settings Installed Apps registration
+2. User `PATH` environment variable registration
+3. Local CLI executable files in `%LOCALAPPDATA%\Programs\Kerkenez\ticket\`
+4. All tickets database, configuration, and backups in `%APPDATA%\Kerkenez\ticket\`
 
 ---
 
@@ -49,19 +69,10 @@ kticket register
 ### Prerequisites
 - [.NET 10.0 SDK](https://dotnet.microsoft.com/download) on Windows 10/11.
 
-### Build Application & CLI
-```bash
-# Build desktop app
-dotnet build KerkenezTicket.csproj -c Release
-
-# Build CLI tool
-dotnet build cli/KTicketCli.csproj -c Release
-```
-
-### Publish Binaries
-```bash
-dotnet publish KerkenezTicket.csproj -c Release -o publish
-dotnet publish cli/KTicketCli.csproj -c Release -o publish
+### Standalone Build
+To compile single-file standalone binaries for both the Desktop GUI and CLI:
+```powershell
+dotnet-standalone .\publish\
 ```
 
 ---

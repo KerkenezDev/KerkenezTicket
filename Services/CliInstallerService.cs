@@ -204,5 +204,56 @@ namespace KerkenezTicket.Services
                 CopyDirectory(sub, Path.Combine(targetDir, Path.GetFileName(sub)));
             }
         }
+
+        public static bool RemovePathRegistration()
+        {
+            try
+            {
+                string targetDir = CliInstallDirectory.TrimEnd('\\');
+                string currentPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "";
+
+                var parts = currentPath.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(p => p.Trim())
+                    .Where(p => !string.Equals(p.TrimEnd('\\'), targetDir, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                string newPath = string.Join(";", parts);
+                Environment.SetEnvironmentVariable("PATH", newPath, EnvironmentVariableTarget.User);
+                BroadcastEnvironmentChange();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CliInstallerService] Remove PATH error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static bool UninstallCli()
+        {
+            try
+            {
+                RemovePathRegistration();
+
+                if (Directory.Exists(CliInstallDirectory))
+                {
+                    Directory.Delete(CliInstallDirectory, true);
+                }
+
+                // If parent directory (%LOCALAPPDATA%\Programs\Kerkenez) is now empty, delete it
+                string? parent = Path.GetDirectoryName(CliInstallDirectory);
+                if (parent != null && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
+                {
+                    try { Directory.Delete(parent, false); } catch { }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CliInstallerService] Uninstall CLI error: {ex.Message}");
+                return false;
+            }
+        }
     }
 }

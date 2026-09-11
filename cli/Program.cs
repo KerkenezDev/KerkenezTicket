@@ -60,6 +60,12 @@ namespace KerkenezTicket.CLI
                     case "install":
                         return HandleRegister();
 
+                    case "uninstall":
+                    case "--uninstall":
+                    case "-uninstall":
+                    case "/uninstall":
+                        return HandleCliUninstall(args.Skip(1).ToArray());
+
                     case "help":
                     case "?":
                     case "h":
@@ -482,6 +488,7 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  kticket kill <id|number>");
             Console.WriteLine("  kticket export [filepath]");
             Console.WriteLine("  kticket register");
+            Console.WriteLine("  kticket uninstall [--yes]");
             Console.WriteLine("  kticket help");
             Console.WriteLine();
             Console.WriteLine("Add Options:");
@@ -497,6 +504,48 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  kticket add \"fix a refresh error sync on x situation\" -a myapp -p high -t sync");
             Console.ResetColor();
             Console.WriteLine();
+        }
+
+        private static int HandleCliUninstall(string[] args)
+        {
+            bool isQuiet = args.Any(a => a.Equals("--yes", StringComparison.OrdinalIgnoreCase) ||
+                                         a.Equals("-y", StringComparison.OrdinalIgnoreCase) ||
+                                         a.Equals("--quiet", StringComparison.OrdinalIgnoreCase) ||
+                                         a.Equals("-q", StringComparison.OrdinalIgnoreCase) ||
+                                         a.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||
+                                         a.Equals("-s", StringComparison.OrdinalIgnoreCase));
+
+            if (!isQuiet)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("WARNING: This will completely uninstall Kerkenez Ticket, remove the CLI from PATH,");
+                Console.WriteLine("and delete all local ticket databases and configuration in %APPDATA%\\Kerkenez\\ticket.");
+                Console.ResetColor();
+                Console.Write("Are you sure you want to proceed? [y/N]: ");
+
+                var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+                if (response != "y" && response != "yes")
+                {
+                    Console.WriteLine("Uninstall cancelled.");
+                    return 0;
+                }
+            }
+
+            bool success = ConfigService.Uninstall();
+            if (success)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("[SUCCESS] Kerkenez Ticket and all associated databases and registrations were successfully removed.");
+                Console.ResetColor();
+                return 0;
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[WARNING] Uninstall completed with some warnings. Please verify %APPDATA%\\Kerkenez\\ticket.");
+                Console.ResetColor();
+                return 1;
+            }
         }
     }
 }

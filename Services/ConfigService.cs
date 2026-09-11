@@ -199,5 +199,58 @@ namespace KerkenezTicket.Services
             }
             catch { }
         }
+
+        public static bool Uninstall()
+        {
+            try
+            {
+                // 1. Remove Windows Uninstall / Add-Remove Programs registration
+                UninstallRegistrationService.Unregister();
+
+                // 2. Remove CLI files and User PATH registration
+                CliInstallerService.UninstallCli();
+
+                // 3. Clean temporary files
+                CleanTempFolder();
+
+                // 4. Release all SQLite connection pools so files can be deleted without locks
+                try
+                {
+                    Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                }
+                catch { }
+
+                // 5. Delete AppData directory (%APPDATA%\Kerkenez\ticket)
+                if (Directory.Exists(AppDataFolder))
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        try
+                        {
+                            Directory.Delete(AppDataFolder, true);
+                            break;
+                        }
+                        catch
+                        {
+                            System.Threading.Thread.Sleep(150);
+                        }
+                    }
+                }
+
+                // 6. If parent directory (%APPDATA%\Kerkenez) is now empty, delete it
+                string? parent = Path.GetDirectoryName(AppDataFolder);
+                if (parent != null && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
+                {
+                    try { Directory.Delete(parent, false); } catch { }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ConfigService] Error during uninstall: {ex.Message}");
+                return false;
+            }
+        }
     }
 }
