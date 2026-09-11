@@ -35,13 +35,20 @@ kticket status KT-1 doing
 kticket done KT-1
 kticket kill KT-1
 
-# 5. Export single-file unencrypted JSON backup
+# 5. Append quick notes (timestamped) without the GUI
+kticket note KT-1 "NullReferenceException at Foo.Bar() line 42"
+kticket note 1 "repro: open dashboard -> click refresh -> crash"
+
+# 6. Open notes in $EDITOR or notepad for freeform editing
+kticket edit KT-1
+
+# 7. Export single-file unencrypted JSON backup
 kticket export my_tickets.json
 
-# 6. Register CLI in user PATH
+# 8. Register CLI in user PATH
 kticket register
 
-# 7. Complete uninstallation (removes registry, PATH, CLI, and data)
+# 9. Complete uninstallation (removes registry, PATH, CLI, and data)
 kticket uninstall [--yes]
 ```
 
