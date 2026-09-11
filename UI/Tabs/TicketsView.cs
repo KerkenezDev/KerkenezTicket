@@ -184,7 +184,7 @@ namespace KerkenezTicket.UI.Tabs
 
             // Status Filter Dropdown
             var lblStatus = new Label { Text = "Status:", AutoSize = true, Margin = new Padding(0, 6, 4, 0), Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(70, 75, 85) };
-            _cboStatusFilter = new ComboBox { Width = 115, Height = 28, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 1, 14, 0) };
+            _cboStatusFilter = new ComboBox { Width = 138, Height = 28, DropDownStyle = ComboBoxStyle.DropDownList, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 1, 14, 0) };
             _cboStatusFilter.Items.AddRange(new object[] { "All Statuses", "Backlog", "To Do", "Doing", "Done", "Killed" });
             _cboStatusFilter.SelectedIndex = 0;
             _cboStatusFilter.SelectedIndexChanged += (s, e) =>

@@ -63,8 +63,8 @@ namespace KerkenezTicket.UI.Tabs
             // 2. App & Type (side-by-side)
             var lblApp = new Label { Text = "App", Location = new Point(pad, y + 4), AutoSize = true };
             _cboApp = new ComboBox { Location = new Point(pad + labelW, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
-            var lblType = new Label { Text = "Type", Location = new Point(pad + labelW + 180, y + 4), AutoSize = true };
-            _cboType = new ComboBox { Location = new Point(pad + labelW + 230, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
+            var lblType = new Label { Text = "Type", Location = new Point(pad + labelW + 195, y + 4), AutoSize = true };
+            _cboType = new ComboBox { Location = new Point(pad + labelW + 265, y), Width = 185, DropDownStyle = ComboBoxStyle.DropDownList };
             this.Controls.Add(lblApp);
             this.Controls.Add(_cboApp);
             this.Controls.Add(lblType);
@@ -74,8 +74,8 @@ namespace KerkenezTicket.UI.Tabs
             // 3. Priority & Status (side-by-side)
             var lblPriority = new Label { Text = "Priority", Location = new Point(pad, y + 4), AutoSize = true };
             _cboPriority = new ComboBox { Location = new Point(pad + labelW, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
-            var lblStatus = new Label { Text = "Status", Location = new Point(pad + labelW + 180, y + 4), AutoSize = true };
-            _cboStatus = new ComboBox { Location = new Point(pad + labelW + 230, y), Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
+            var lblStatus = new Label { Text = "Status", Location = new Point(pad + labelW + 195, y + 4), AutoSize = true };
+            _cboStatus = new ComboBox { Location = new Point(pad + labelW + 265, y), Width = 185, DropDownStyle = ComboBoxStyle.DropDownList };
             this.Controls.Add(lblPriority);
             this.Controls.Add(_cboPriority);
             this.Controls.Add(lblStatus);
