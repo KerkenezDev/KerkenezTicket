@@ -45,6 +45,12 @@ namespace KerkenezTicket.UI.Tabs
         private CheckBox _chkAutoBackupOnExit = null!;
         private NumericUpDown _numMaxBackups = null!;
 
+        // Human-Readable Exports
+        private TextBox _txtExportDir = null!;
+        private Button _btnBrowseExportDir = null!;
+        private Button _btnOpenExportDir = null!;
+        private ComboBox _cboDefaultExportFormat = null!;
+
         private Button _btnCreateBackupNow = null!;
         private Button _btnRestoreBackupFile = null!;
         private ListView _lvBackups = null!;
@@ -615,6 +621,123 @@ namespace KerkenezTicket.UI.Tabs
             };
             card3.Controls.Add(_lblBackupStatus);
 
+            // Export Settings Divider & Section
+            var pnlExportSep = new Panel
+            {
+                Width = CardWidth - 48,
+                Height = 1,
+                BackColor = Color.FromArgb(230, 235, 242),
+                Margin = new Padding(0, 16, 0, 14)
+            };
+            card3.Controls.Add(pnlExportSep);
+
+            var lblExportHeader = new Label
+            {
+                Text = "📤  Human-Readable Ticket Exports & Attachments",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 35, 45),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            card3.Controls.Add(lblExportHeader);
+
+            var lblExportDesc = new Label
+            {
+                Text = "Export individual tickets or batch selections to human-readable Markdown (.md). Tickets with attachments (screenshots, logs) can be bundled into a directory or .zip archive.",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(108, 117, 125),
+                Width = CardWidth - 48,
+                Height = 32,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+            card3.Controls.Add(lblExportDesc);
+
+            // Export Directory Row
+            var lblExportDir = new Label { Text = "Default Export Destination Folder:", Font = new Font("Segoe UI", 9F, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
+            card3.Controls.Add(lblExportDir);
+
+            var rowExport = new FlowLayoutPanel
+            {
+                Width = CardWidth - 48,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 12)
+            };
+
+            _txtExportDir = new TextBox
+            {
+                Width = 440,
+                Font = new Font("Consolas", 9F)
+            };
+
+            _btnBrowseExportDir = new Button
+            {
+                Text = "Browse...",
+                Width = 110,
+                Height = 28,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F),
+                BackColor = Color.FromArgb(240, 242, 245),
+                Margin = new Padding(8, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+            _btnBrowseExportDir.FlatAppearance.BorderColor = Color.FromArgb(215, 222, 230);
+            _btnBrowseExportDir.Click += OnBrowseExportDirClicked;
+
+            _btnOpenExportDir = new Button
+            {
+                Text = "📁 Open Folder",
+                Width = 120,
+                Height = 28,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F),
+                BackColor = Color.FromArgb(240, 242, 245),
+                Margin = new Padding(8, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+            _btnOpenExportDir.FlatAppearance.BorderColor = Color.FromArgb(215, 222, 230);
+            _btnOpenExportDir.Click += (s, e) =>
+            {
+                string dir = string.IsNullOrWhiteSpace(_txtExportDir.Text) ? _configService.GetExportDirectory() : _txtExportDir.Text.Trim();
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                OpenDirectory(dir);
+            };
+
+            rowExport.Controls.Add(_txtExportDir);
+            rowExport.Controls.Add(_btnBrowseExportDir);
+            rowExport.Controls.Add(_btnOpenExportDir);
+            card3.Controls.Add(rowExport);
+
+            // Default Format Row
+            var rowFormat = new FlowLayoutPanel
+            {
+                Width = CardWidth - 48,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var lblFmt = new Label { Text = "Default Export Package Format:", AutoSize = true, Margin = new Padding(0, 5, 10, 0), Font = new Font("Segoe UI", 8.5F, FontStyle.Bold) };
+            _cboDefaultExportFormat = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("Segoe UI", 9F),
+                Width = 340,
+                Height = 28
+            };
+            _cboDefaultExportFormat.Items.AddRange(new[]
+            {
+                "Zip Archive (.zip with attachments)",
+                "Folder Directory (Markdown & attachments folder)",
+                "Single Markdown File (.md)"
+            });
+
+            rowFormat.Controls.Add(lblFmt);
+            rowFormat.Controls.Add(_cboDefaultExportFormat);
+            card3.Controls.Add(rowFormat);
+
             mainFlow.Controls.Add(card3);
 
             // ==================== Card 4: Terminal CLI (kticket) Quick Reference ====================
@@ -950,6 +1073,15 @@ kticket register"
             _chkAutoBackupOnExit.Checked = s.AutoBackupOnExit;
             _numMaxBackups.Value = Math.Clamp(s.MaxBackupsToRetain, 3, 100);
 
+            // Exports
+            _txtExportDir.Text = _configService.GetExportDirectory();
+            _cboDefaultExportFormat.SelectedIndex = s.DefaultExportFormat switch
+            {
+                "Folder" => 1,
+                "Markdown" => 2,
+                _ => 0
+            };
+
             LoadExistingBackups();
         }
 
@@ -1004,6 +1136,20 @@ kticket register"
             }
         }
 
+        private void OnBrowseExportDirClicked(object? sender, EventArgs e)
+        {
+            using var fbd = new FolderBrowserDialog
+            {
+                Description = "Select Default Destination Folder for Human-Readable Ticket Exports",
+                SelectedPath = Directory.Exists(_txtExportDir.Text) ? _txtExportDir.Text : _configService.GetExportDirectory()
+            };
+
+            if (fbd.ShowDialog(this) == DialogResult.OK)
+            {
+                _txtExportDir.Text = fbd.SelectedPath;
+            }
+        }
+
         private void OnSaveSettingsClicked(object? sender, EventArgs e)
         {
             SaveSettings();
@@ -1035,6 +1181,18 @@ kticket register"
             {
                 s.BackupDirectory = _txtBackupDir.Text.Trim();
             }
+
+            if (!string.IsNullOrWhiteSpace(_txtExportDir.Text))
+            {
+                s.ExportDirectory = _txtExportDir.Text.Trim();
+            }
+
+            s.DefaultExportFormat = _cboDefaultExportFormat.SelectedIndex switch
+            {
+                1 => "Folder",
+                2 => "Markdown",
+                _ => "Zip"
+            };
 
             s.AutoBackupOnExit = _chkAutoBackupOnExit.Checked;
             s.MaxBackupsToRetain = (int)_numMaxBackups.Value;

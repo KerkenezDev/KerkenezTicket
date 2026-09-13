@@ -85,6 +85,17 @@ namespace KerkenezTicket.Services
                         color_hex TEXT,
                         icon TEXT
                     );
+
+                    CREATE TABLE IF NOT EXISTS ticket_attachments (
+                        id TEXT PRIMARY KEY,
+                        ticket_id TEXT NOT NULL,
+                        file_name TEXT NOT NULL,
+                        stored_path TEXT NOT NULL,
+                        file_size_bytes INTEGER NOT NULL,
+                        created_at TEXT NOT NULL
+                    );
+
+                    CREATE INDEX IF NOT EXISTS idx_attachments_ticket_id ON ticket_attachments(ticket_id);
                 ";
                 cmd.ExecuteNonQuery();
 
@@ -314,9 +325,14 @@ namespace KerkenezTicket.Services
             {
                 using var conn = CreateConnection();
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "DELETE FROM tickets WHERE id = @id;";
+                cmd.CommandText = "DELETE FROM ticket_attachments WHERE ticket_id = @id; DELETE FROM tickets WHERE id = @id;";
                 cmd.Parameters.AddWithValue("@id", id);
-                return cmd.ExecuteNonQuery() > 0;
+                bool deleted = cmd.ExecuteNonQuery() > 0;
+                if (deleted)
+                {
+                    AttachmentStorageService.DeleteTicketAttachmentsFolder(id);
+                }
+                return deleted;
             }
         }
 
@@ -334,6 +350,8 @@ namespace KerkenezTicket.Services
             {
                 int.TryParse(normalized, out parsedNum);
             }
+
+            TicketItem? ticket = null;
 
             lock (_dbLock)
             {
@@ -353,11 +371,16 @@ namespace KerkenezTicket.Services
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
                 {
-                    return MapTicketFromReader(reader);
+                    ticket = MapTicketFromReader(reader);
                 }
             }
 
-            return null;
+            if (ticket != null)
+            {
+                ticket.Attachments = GetAttachmentsForTicket(ticket.Id);
+            }
+
+            return ticket;
         }
 
         public List<TicketItem> GetAllTickets()
@@ -381,8 +404,151 @@ namespace KerkenezTicket.Services
                     list.Add(MapTicketFromReader(reader));
                 }
 
+                var attMap = GetAllAttachmentsGrouped();
+                foreach (var t in list)
+                {
+                    if (attMap.TryGetValue(t.Id, out var atts))
+                    {
+                        t.Attachments = atts;
+                    }
+                }
+
                 return list;
             }
+        }
+
+        public List<TicketAttachment> GetAttachmentsForTicket(string ticketId)
+        {
+            if (string.IsNullOrWhiteSpace(ticketId)) return new List<TicketAttachment>();
+
+            lock (_dbLock)
+            {
+                var list = new List<TicketAttachment>();
+                using var conn = CreateConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT id, ticket_id, file_name, stored_path, file_size_bytes, created_at
+                    FROM ticket_attachments
+                    WHERE ticket_id = @tid
+                    ORDER BY created_at ASC;
+                ";
+                cmd.Parameters.AddWithValue("@tid", ticketId);
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(MapAttachmentFromReader(reader));
+                }
+                return list;
+            }
+        }
+
+        public Dictionary<string, List<TicketAttachment>> GetAllAttachmentsGrouped()
+        {
+            lock (_dbLock)
+            {
+                var dict = new Dictionary<string, List<TicketAttachment>>(StringComparer.OrdinalIgnoreCase);
+                using var conn = CreateConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT id, ticket_id, file_name, stored_path, file_size_bytes, created_at
+                    FROM ticket_attachments
+                    ORDER BY created_at ASC;
+                ";
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var att = MapAttachmentFromReader(reader);
+                    if (!dict.TryGetValue(att.TicketId, out var attList))
+                    {
+                        attList = new List<TicketAttachment>();
+                        dict[att.TicketId] = attList;
+                    }
+                    attList.Add(att);
+                }
+                return dict;
+            }
+        }
+
+        public TicketAttachment AddAttachment(TicketAttachment attachment)
+        {
+            if (string.IsNullOrWhiteSpace(attachment.Id))
+            {
+                attachment.Id = Guid.NewGuid().ToString("N");
+            }
+
+            lock (_dbLock)
+            {
+                using var conn = CreateConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT OR REPLACE INTO ticket_attachments (
+                        id, ticket_id, file_name, stored_path, file_size_bytes, created_at
+                    ) VALUES (
+                        @id, @ticket_id, @file_name, @stored_path, @size, @created_at
+                    );
+                ";
+                cmd.Parameters.AddWithValue("@id", attachment.Id);
+                cmd.Parameters.AddWithValue("@ticket_id", attachment.TicketId);
+                cmd.Parameters.AddWithValue("@file_name", attachment.FileName ?? "");
+                cmd.Parameters.AddWithValue("@stored_path", attachment.StoredRelativePath ?? "");
+                cmd.Parameters.AddWithValue("@size", attachment.FileSizeBytes);
+                cmd.Parameters.AddWithValue("@created_at", attachment.CreatedAt.ToString("o"));
+
+                cmd.ExecuteNonQuery();
+                return attachment;
+            }
+        }
+
+        public bool DeleteAttachment(string attachmentId)
+        {
+            if (string.IsNullOrWhiteSpace(attachmentId)) return false;
+
+            lock (_dbLock)
+            {
+                string? storedPath = null;
+                using var conn = CreateConnection();
+                using var cmdGet = conn.CreateCommand();
+                cmdGet.CommandText = "SELECT stored_path FROM ticket_attachments WHERE id = @id LIMIT 1;";
+                cmdGet.Parameters.AddWithValue("@id", attachmentId);
+                object? result = cmdGet.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                {
+                    storedPath = result.ToString();
+                }
+
+                using var cmdDel = conn.CreateCommand();
+                cmdDel.CommandText = "DELETE FROM ticket_attachments WHERE id = @id;";
+                cmdDel.Parameters.AddWithValue("@id", attachmentId);
+                bool deleted = cmdDel.ExecuteNonQuery() > 0;
+
+                if (deleted && !string.IsNullOrWhiteSpace(storedPath))
+                {
+                    AttachmentStorageService.DeleteAttachmentFile(storedPath);
+                }
+
+                return deleted;
+            }
+        }
+
+        private static TicketAttachment MapAttachmentFromReader(SqliteDataReader reader)
+        {
+            var att = new TicketAttachment
+            {
+                Id = reader.GetString(0),
+                TicketId = reader.GetString(1),
+                FileName = reader.GetString(2),
+                StoredRelativePath = reader.GetString(3),
+                FileSizeBytes = reader.GetInt64(4)
+            };
+
+            if (DateTime.TryParse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+            {
+                att.CreatedAt = dt;
+            }
+
+            return att;
         }
 
         public List<TicketItem> GetFilteredTickets(string? app = null, string? type = null, TicketStatus? status = null, string? search = null)

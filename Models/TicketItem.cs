@@ -24,9 +24,12 @@ namespace KerkenezTicket.Models
 
         public string FormattedId => !string.IsNullOrEmpty(Id) ? Id : $"KT-{TicketNumber}";
 
+        public List<TicketAttachment> Attachments { get; set; } = new List<TicketAttachment>();
+        public int AttachmentCount => Attachments?.Count ?? 0;
+
         public TicketItem Clone()
         {
-            return new TicketItem
+            var clone = new TicketItem
             {
                 Id = this.Id,
                 TicketNumber = this.TicketNumber,
@@ -41,8 +44,19 @@ namespace KerkenezTicket.Models
                 CreatedAt = this.CreatedAt,
                 UpdatedAt = this.UpdatedAt,
                 CompletedAt = this.CompletedAt,
-                KilledAt = this.KilledAt
+                KilledAt = this.KilledAt,
+                Attachments = new List<TicketAttachment>()
             };
+
+            if (this.Attachments != null)
+            {
+                foreach (var att in this.Attachments)
+                {
+                    clone.Attachments.Add(att.Clone());
+                }
+            }
+
+            return clone;
         }
     }
 }

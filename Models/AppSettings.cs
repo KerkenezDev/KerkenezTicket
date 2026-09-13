@@ -65,6 +65,8 @@ namespace KerkenezTicket.Models
         // Storage & Backup Options
         public string DatabasePath { get; set; } = "";
         public string BackupDirectory { get; set; } = "";
+        public string ExportDirectory { get; set; } = "";
+        public string DefaultExportFormat { get; set; } = "Zip"; // "Zip", "Folder", "Markdown"
         public bool AutoBackupOnExit { get; set; } = false;
         public int MaxBackupsToRetain { get; set; } = 10;
 

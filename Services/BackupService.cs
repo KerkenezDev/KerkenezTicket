@@ -6,6 +6,17 @@ using KerkenezTicket.Models;
 
 namespace KerkenezTicket.Services
 {
+    public class BackupAttachmentPayload
+    {
+        public string AttachmentId { get; set; } = "";
+        public string TicketId { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string StoredRelativePath { get; set; } = "";
+        public long FileSizeBytes { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string? Base64Data { get; set; }
+    }
+
     public class BackupPackage
     {
         public string Format { get; set; } = "KerkenezTicketBackup";
@@ -16,6 +27,7 @@ namespace KerkenezTicket.Services
         public int TotalTickets { get; set; }
         public List<AppCategory> Apps { get; set; } = new List<AppCategory>();
         public List<TicketItem> Tickets { get; set; } = new List<TicketItem>();
+        public List<BackupAttachmentPayload> AttachmentFiles { get; set; } = new List<BackupAttachmentPayload>();
     }
 
     public class BackupService
@@ -57,6 +69,7 @@ namespace KerkenezTicket.Services
                     backupPath = Path.Combine(dir, fileName);
                 }
 
+                var allTickets = _db.GetAllTickets();
                 var package = new BackupPackage
                 {
                     Format = "KerkenezTicketBackup",
@@ -65,9 +78,42 @@ namespace KerkenezTicket.Services
                     MachineName = Environment.MachineName,
                     UserName = Environment.UserName,
                     Apps = _db.GetAppCategories(),
-                    Tickets = _db.GetAllTickets()
+                    Tickets = allTickets
                 };
                 package.TotalTickets = package.Tickets.Count;
+
+                // Safely embed attachments up to 25MB each
+                const long maxFileSize = 25 * 1024 * 1024;
+                foreach (var t in allTickets)
+                {
+                    if (t.Attachments != null)
+                    {
+                        foreach (var att in t.Attachments)
+                        {
+                            try
+                            {
+                                string fullPath = AttachmentStorageService.GetFullPath(att.StoredRelativePath);
+                                string? base64 = null;
+                                if (File.Exists(fullPath) && new FileInfo(fullPath).Length <= maxFileSize)
+                                {
+                                    base64 = Convert.ToBase64String(File.ReadAllBytes(fullPath));
+                                }
+
+                                package.AttachmentFiles.Add(new BackupAttachmentPayload
+                                {
+                                    AttachmentId = att.Id,
+                                    TicketId = att.TicketId,
+                                    FileName = att.FileName,
+                                    StoredRelativePath = att.StoredRelativePath,
+                                    FileSizeBytes = att.FileSizeBytes,
+                                    CreatedAt = att.CreatedAt,
+                                    Base64Data = base64
+                                });
+                            }
+                            catch { }
+                        }
+                    }
+                }
 
                 string json = JsonSerializer.Serialize(package, JsonOptions);
 
@@ -134,6 +180,42 @@ namespace KerkenezTicket.Services
                     {
                         _db.AddTicket(ticket);
                         imported++;
+                    }
+
+                    // Restore attachment records
+                    if (ticket.Attachments != null)
+                    {
+                        foreach (var att in ticket.Attachments)
+                        {
+                            _db.AddAttachment(att);
+                        }
+                    }
+                }
+
+                // Restore attachment files if present in backup
+                if (package.AttachmentFiles != null)
+                {
+                    foreach (var attFile in package.AttachmentFiles)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrWhiteSpace(attFile.Base64Data))
+                            {
+                                string fullPath = AttachmentStorageService.GetFullPath(attFile.StoredRelativePath);
+                                string? dir = Path.GetDirectoryName(fullPath);
+                                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                                {
+                                    Directory.CreateDirectory(dir);
+                                }
+
+                                if (!File.Exists(fullPath) || overwriteExisting)
+                                {
+                                    byte[] bytes = Convert.FromBase64String(attFile.Base64Data);
+                                    File.WriteAllBytes(fullPath, bytes);
+                                }
+                            }
+                        }
+                        catch { }
                     }
                 }
 

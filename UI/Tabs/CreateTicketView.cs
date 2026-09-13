@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using KerkenezTicket.Models;
@@ -9,6 +12,25 @@ namespace KerkenezTicket.UI.Tabs
 {
     public class CreateTicketView : UserControl
     {
+        private class PendingAttachment
+        {
+            public string FileName { get; set; } = "";
+            public long FileSizeBytes { get; set; }
+            public string? SourceFilePath { get; set; }
+            public byte[]? RawBytes { get; set; }
+            public bool IsImage { get; set; }
+
+            public string FormattedFileSize
+            {
+                get
+                {
+                    if (FileSizeBytes < 1024) return $"{FileSizeBytes} B";
+                    if (FileSizeBytes < 1024 * 1024) return $"{(FileSizeBytes / 1024.0):F1} KB";
+                    return $"{(FileSizeBytes / (1024.0 * 1024.0)):F1} MB";
+                }
+            }
+        }
+
         private readonly ConfigService _configService;
         private readonly TicketDatabaseService _dbService;
 
@@ -23,6 +45,11 @@ namespace KerkenezTicket.UI.Tabs
         private Button _btnCreate = null!;
         private Button _btnClear = null!;
         private Label _lblStatusMsg = null!;
+
+        // Attachments
+        private readonly List<PendingAttachment> _pendingAttachments = new List<PendingAttachment>();
+        private FlowLayoutPanel _pnlAttachmentsList = null!;
+        private Label _lblAttachmentsSummary = null!;
 
         public event Action<TicketItem>? TicketCreated;
 
@@ -185,7 +212,119 @@ namespace KerkenezTicket.UI.Tabs
             pnlNotes.Controls.Add(_txtNotes);
             card.Controls.Add(pnlNotes);
 
-            // 7. Action Buttons
+            // 7. Attachments (Logs, Screenshots, Files)
+            var pnlAtt = new Panel
+            {
+                Width = innerWidth,
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 16)
+            };
+
+            var lblAtt = new Label
+            {
+                Text = "📎  Attachments (Logs, Screenshots, Files):",
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(35, 40, 50),
+                AutoSize = true,
+                Location = new Point(0, 0)
+            };
+
+            _lblAttachmentsSummary = new Label
+            {
+                Text = "0 files attached. Drag & drop files here or use buttons below.",
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(110, 115, 125),
+                AutoSize = true,
+                Location = new Point(0, 22)
+            };
+
+            var attBox = new FlowLayoutPanel
+            {
+                Width = innerWidth,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                BackColor = Color.FromArgb(250, 251, 252),
+                Padding = new Padding(12),
+                Location = new Point(0, 44),
+                Margin = new Padding(0, 44, 0, 0)
+            };
+            attBox.Paint += (s, e) =>
+            {
+                using var p = new Pen(Color.FromArgb(220, 226, 235), 1);
+                e.Graphics.DrawRectangle(p, 0, 0, attBox.Width - 1, attBox.Height - 1);
+            };
+
+            var attToolbar = new FlowLayoutPanel
+            {
+                Width = innerWidth - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            var btnAddFiles = new Button
+            {
+                Text = "📎 Add File(s)...",
+                AutoSize = true,
+                Height = 30,
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = Color.FromArgb(40, 45, 55),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 8, 0)
+            };
+            btnAddFiles.FlatAppearance.BorderColor = Color.FromArgb(210, 218, 228);
+            btnAddFiles.Click += (s, e) => ShowAddFileDialog();
+
+            var btnPasteImg = new Button
+            {
+                Text = "📋 Paste Screenshot",
+                AutoSize = true,
+                Height = 30,
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = Color.FromArgb(40, 45, 55),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 8, 0)
+            };
+            btnPasteImg.FlatAppearance.BorderColor = Color.FromArgb(210, 218, 228);
+            btnPasteImg.Click += (s, e) => PasteScreenshotFromClipboard();
+
+            attToolbar.Controls.Add(btnAddFiles);
+            attToolbar.Controls.Add(btnPasteImg);
+
+            _pnlAttachmentsList = new FlowLayoutPanel
+            {
+                Width = innerWidth - 28,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0)
+            };
+
+            attBox.Controls.Add(attToolbar);
+            attBox.Controls.Add(_pnlAttachmentsList);
+
+            // Drag and drop setup on attachment box and whole control
+            attBox.AllowDrop = true;
+            attBox.DragEnter += OnAttachmentsDragEnter;
+            attBox.DragDrop += OnAttachmentsDragDrop;
+            this.AllowDrop = true;
+            this.DragEnter += OnAttachmentsDragEnter;
+            this.DragDrop += OnAttachmentsDragDrop;
+
+            pnlAtt.Controls.Add(lblAtt);
+            pnlAtt.Controls.Add(_lblAttachmentsSummary);
+            pnlAtt.Controls.Add(attBox);
+            card.Controls.Add(pnlAtt);
+
+            // 8. Action Buttons
             var rowBtns = new FlowLayoutPanel
             {
                 Width = innerWidth,
@@ -311,6 +450,9 @@ namespace KerkenezTicket.UI.Tabs
             _txtTags.Text = "";
             _lblStatusMsg.Text = "";
 
+            _pendingAttachments.Clear();
+            RefreshPendingAttachmentsList();
+
             _cboApp.Items.Clear();
             var dbApps = _dbService.GetAllAppNames();
             _configService.SyncKnownApps(dbApps);
@@ -383,10 +525,241 @@ namespace KerkenezTicket.UI.Tabs
             };
 
             var created = _dbService.AddTicket(ticket);
-            _lblStatusMsg.Text = $"✓ Created {created.FormattedId} successfully!";
+
+            // Save staged attachments
+            foreach (var pending in _pendingAttachments)
+            {
+                try
+                {
+                    TicketAttachment? att = null;
+                    if (pending.RawBytes != null)
+                    {
+                        att = AttachmentStorageService.SaveImageBytes(created.Id, pending.RawBytes, pending.FileName);
+                    }
+                    else if (!string.IsNullOrEmpty(pending.SourceFilePath))
+                    {
+                        att = AttachmentStorageService.SaveAttachmentFile(created.Id, pending.SourceFilePath, pending.FileName);
+                    }
+
+                    if (att != null)
+                    {
+                        _dbService.AddAttachment(att);
+                        created.Attachments.Add(att);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogService.Error("Attachments", $"Failed to save attachment {pending.FileName}: {ex.Message}");
+                }
+            }
+
+            string attMsg = created.Attachments.Count > 0 ? $" with {created.Attachments.Count} attachment(s)" : "";
+            _lblStatusMsg.Text = $"✓ Created {created.FormattedId} successfully{attMsg}!";
 
             ResetFormDefaults();
             TicketCreated?.Invoke(created);
+        }
+
+        private void ShowAddFileDialog()
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Select Attachments (Logs, Screenshots, Files)",
+                Multiselect = true,
+                Filter = "All Files (*.*)|*.*|Logs & Text (*.log;*.txt;*.json;*.xml;*.csv)|*.log;*.txt;*.json;*.xml;*.csv|Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp"
+            };
+
+            if (ofd.ShowDialog(this) == DialogResult.OK)
+            {
+                foreach (var file in ofd.FileNames)
+                {
+                    AddPendingFile(file);
+                }
+            }
+        }
+
+        private void PasteScreenshotFromClipboard()
+        {
+            try
+            {
+                if (Clipboard.ContainsImage())
+                {
+                    using var img = Clipboard.GetImage();
+                    if (img != null)
+                    {
+                        using var ms = new MemoryStream();
+                        img.Save(ms, ImageFormat.Png);
+                        byte[] bytes = ms.ToArray();
+                        string name = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                        AddPendingImageBytes(bytes, name);
+                        return;
+                    }
+                }
+
+                MessageBox.Show(this, "No image found in clipboard.\n\nTip: Use Windows Snipping Tool (Win+Shift+S) or copy an image, then click Paste Screenshot.", "No Clipboard Image", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not paste screenshot: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void AddPendingFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return;
+                var fi = new FileInfo(path);
+                string ext = fi.Extension.ToLowerInvariant();
+                bool isImg = ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp" or ".ico";
+
+                if (_pendingAttachments.Any(p => p.SourceFilePath != null && string.Equals(p.SourceFilePath, path, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                _pendingAttachments.Add(new PendingAttachment
+                {
+                    FileName = fi.Name,
+                    FileSizeBytes = fi.Length,
+                    SourceFilePath = path,
+                    IsImage = isImg
+                });
+
+                RefreshPendingAttachmentsList();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to attach file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void AddPendingImageBytes(byte[] bytes, string name)
+        {
+            _pendingAttachments.Add(new PendingAttachment
+            {
+                FileName = name,
+                FileSizeBytes = bytes.Length,
+                RawBytes = bytes,
+                IsImage = true
+            });
+
+            RefreshPendingAttachmentsList();
+        }
+
+        private void OnAttachmentsDragEnter(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            {
+                e.Effect = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+        private void OnAttachmentsDragDrop(object? sender, DragEventArgs e)
+        {
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            {
+                var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                if (files != null)
+                {
+                    foreach (var file in files)
+                    {
+                        AddPendingFile(file);
+                    }
+                }
+            }
+        }
+
+        private void RefreshPendingAttachmentsList()
+        {
+            _pnlAttachmentsList.SuspendLayout();
+            _pnlAttachmentsList.Controls.Clear();
+
+            int count = _pendingAttachments.Count;
+            if (count == 0)
+            {
+                _lblAttachmentsSummary.Text = "0 files attached. Drag & drop files here or use buttons below.";
+                var lblEmpty = new Label
+                {
+                    Text = "No attachments staged. Drop log files or screenshots here, or click Add File(s) / Paste Screenshot.",
+                    ForeColor = Color.FromArgb(140, 145, 155),
+                    Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+                    AutoSize = true,
+                    Margin = new Padding(2, 6, 0, 4)
+                };
+                _pnlAttachmentsList.Controls.Add(lblEmpty);
+            }
+            else
+            {
+                long totalBytes = _pendingAttachments.Sum(p => p.FileSizeBytes);
+                string totalStr = totalBytes < 1024 * 1024 ? $"{(totalBytes / 1024.0):F1} KB" : $"{(totalBytes / (1024.0 * 1024.0)):F1} MB";
+                _lblAttachmentsSummary.Text = $"{count} file{(count > 1 ? "s" : "")} staged ({totalStr}).";
+
+                foreach (var item in _pendingAttachments)
+                {
+                    var chip = CreatePendingChip(item);
+                    _pnlAttachmentsList.Controls.Add(chip);
+                }
+            }
+
+            _pnlAttachmentsList.ResumeLayout();
+        }
+
+        private Control CreatePendingChip(PendingAttachment item)
+        {
+            var pnl = new Panel
+            {
+                AutoSize = true,
+                Height = 32,
+                BackColor = Color.White,
+                Padding = new Padding(8, 5, 6, 5),
+                Margin = new Padding(0, 0, 8, 8)
+            };
+
+            pnl.Paint += (s, e) =>
+            {
+                using var p = new Pen(Color.FromArgb(218, 224, 233), 1);
+                e.Graphics.DrawRectangle(p, 0, 0, pnl.Width - 1, pnl.Height - 1);
+            };
+
+            string icon = item.IsImage ? "🖼️" : (item.FileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || item.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? "📄" : "📎");
+
+            var lblName = new Label
+            {
+                Text = $"{icon} {item.FileName} ({item.FormattedFileSize})",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(35, 40, 50),
+                AutoSize = true,
+                Location = new Point(6, 6)
+            };
+
+            var btnRemove = new Button
+            {
+                Text = "✕",
+                Size = new Size(20, 20),
+                Location = new Point(lblName.PreferredWidth + 12, 5),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(160, 165, 175),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnRemove.FlatAppearance.BorderSize = 0;
+            btnRemove.MouseEnter += (s, e) => { btnRemove.ForeColor = Color.FromArgb(220, 53, 69); };
+            btnRemove.MouseLeave += (s, e) => { btnRemove.ForeColor = Color.FromArgb(160, 165, 175); };
+            btnRemove.Click += (s, e) =>
+            {
+                _pendingAttachments.Remove(item);
+                RefreshPendingAttachmentsList();
+            };
+
+            pnl.Controls.Add(lblName);
+            pnl.Controls.Add(btnRemove);
+            return pnl;
         }
     }
 }

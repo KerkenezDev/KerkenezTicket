@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using KerkenezTicket.Models;
@@ -66,6 +68,7 @@ namespace KerkenezTicket.UI.Tabs
         private Button _btnActionTodo = null!;
         private Button _btnActionBacklog = null!;
         private Button _btnActionKill = null!;
+        private Button _btnActionExport = null!;
         private Button _btnActionEdit = null!;
         private Button _btnActionDelete = null!;
         private Label _lblMetaDates = null!;
@@ -80,6 +83,13 @@ namespace KerkenezTicket.UI.Tabs
         private TextBox _txtDetailNotes = null!;
         private TextBox _txtNewNote = null!;
         private Button _btnAddNote = null!;
+
+        // Card 4: Attachments
+        private Panel _cardAttachments = null!;
+        private Label _lblDetailAttachmentsHeader = null!;
+        private FlowLayoutPanel _pnlDetailAttachmentsList = null!;
+        private Button _btnDetailAddAtt = null!;
+        private Button _btnDetailPasteScreenshot = null!;
 
         private TicketItem? _currentTicket;
         private List<TicketItem> _loadedTickets = new List<TicketItem>();
@@ -381,6 +391,7 @@ namespace KerkenezTicket.UI.Tabs
             _btnActionBacklog = CreateActionButton("📋  Move to Backlog", Color.FromArgb(114, 9, 183), (s, e) => ChangeStatus(TicketStatus.Backlog));
             _btnActionKill = CreateActionButton("✕  Kill Ticket", Color.FromArgb(108, 117, 125), (s, e) => ChangeStatus(TicketStatus.Killed));
 
+            _btnActionExport = CreateOutlineButton("📤 Export...", (s, e) => OnExportSingleTicketClicked());
             _btnActionEdit = CreateOutlineButton("✏️ Edit", (s, e) => OnEditClicked());
             _btnActionDelete = CreateOutlineButton("🗑 Delete", (s, e) => OnDeleteClicked());
             _btnActionDelete.ForeColor = Color.FromArgb(220, 53, 69);
@@ -390,6 +401,7 @@ namespace KerkenezTicket.UI.Tabs
             _pnlActionButtons.Controls.Add(_btnActionTodo);
             _pnlActionButtons.Controls.Add(_btnActionBacklog);
             _pnlActionButtons.Controls.Add(_btnActionKill);
+            _pnlActionButtons.Controls.Add(_btnActionExport);
             _pnlActionButtons.Controls.Add(_btnActionEdit);
             _pnlActionButtons.Controls.Add(_btnActionDelete);
             _cardHeader.Controls.Add(_pnlActionButtons);
@@ -499,6 +511,46 @@ namespace KerkenezTicket.UI.Tabs
 
             _detailFlow.Controls.Add(_cardNotes);
 
+            // ==================== Card 4: Attachments ====================
+            _cardAttachments = CreateCardContainer();
+
+            var rowAttHeader = new FlowLayoutPanel
+            {
+                Width = 560,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            _lblDetailAttachmentsHeader = CreateSectionHeader("📎  Attachments");
+            _lblDetailAttachmentsHeader.Margin = new Padding(0, 4, 12, 0);
+
+            _btnDetailAddAtt = CreateOutlineButton("📎 Add File...", (s, e) => OnDetailAddAttachmentClicked());
+            _btnDetailPasteScreenshot = CreateOutlineButton("📋 Paste Screenshot", (s, e) => OnDetailPasteScreenshotClicked());
+
+            rowAttHeader.Controls.Add(_lblDetailAttachmentsHeader);
+            rowAttHeader.Controls.Add(_btnDetailAddAtt);
+            rowAttHeader.Controls.Add(_btnDetailPasteScreenshot);
+            _cardAttachments.Controls.Add(rowAttHeader);
+
+            _pnlDetailAttachmentsList = new FlowLayoutPanel
+            {
+                Width = 560,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+
+            _cardAttachments.AllowDrop = true;
+            _cardAttachments.DragEnter += OnDetailDragEnter;
+            _cardAttachments.DragDrop += OnDetailDragDrop;
+
+            _cardAttachments.Controls.Add(_pnlDetailAttachmentsList);
+            _detailFlow.Controls.Add(_cardAttachments);
+
             _pnlDetailScroll.Controls.Add(_detailFlow);
 
             // Responsive Width Adjustment
@@ -508,9 +560,11 @@ namespace KerkenezTicket.UI.Tabs
                 _cardHeader.Width = cardW;
                 _cardDescription.Width = cardW;
                 _cardNotes.Width = cardW;
+                _cardAttachments.Width = cardW;
                 _lblDetailTitle.MaximumSize = new Size(cardW - 32, 0);
                 _txtDetailDescription.Width = cardW - 32;
                 _txtDetailNotes.Width = cardW - 32;
+                _pnlDetailAttachmentsList.Width = cardW - 32;
                 _txtNewNote.Width = Math.Max(150, cardW - 132);
                 if (_txtNewNote.PreferredHeight > 0)
                 {
@@ -732,7 +786,8 @@ namespace KerkenezTicket.UI.Tabs
                 lvi.SubItems.Add(ticket.Priority.ToDisplayName());
                 lvi.SubItems.Add(ticket.App);
                 lvi.SubItems.Add(ticket.TicketType);
-                lvi.SubItems.Add(ticket.Title);
+                string titleDisplay = ticket.AttachmentCount > 0 ? $"📎 {ticket.Title}" : ticket.Title;
+                lvi.SubItems.Add(titleDisplay);
                 lvi.SubItems.Add(ticket.UpdatedAt.ToString("MM-dd HH:mm"));
                 lvi.Tag = ticket;
 
@@ -860,9 +915,11 @@ namespace KerkenezTicket.UI.Tabs
                 _lblMetaTags.Text = "";
                 _txtDetailDescription.Text = "";
                 _txtDetailNotes.Text = "";
+                _cardAttachments.Visible = false;
                 return;
             }
 
+            _cardAttachments.Visible = true;
             _lblDetailId.Text = ticket.FormattedId;
             _lblDetailTitle.Text = ticket.Title;
 
@@ -906,6 +963,257 @@ namespace KerkenezTicket.UI.Tabs
             _txtDetailDescription.Text = string.IsNullOrWhiteSpace(ticket.Description) ? "(No detailed description provided)" : ticket.Description;
             _txtDetailNotes.Text = string.IsNullOrWhiteSpace(ticket.Notes) ? "(No work notes logged)" : ticket.Notes;
             _txtNewNote.Text = "";
+
+            RenderDetailAttachments();
+        }
+
+        private void RenderDetailAttachments()
+        {
+            if (_currentTicket == null) return;
+
+            _currentTicket.Attachments = _dbService.GetAttachmentsForTicket(_currentTicket.Id);
+            int count = _currentTicket.AttachmentCount;
+            _lblDetailAttachmentsHeader.Text = $"📎  Attachments ({count})";
+
+            _pnlDetailAttachmentsList.SuspendLayout();
+            _pnlDetailAttachmentsList.Controls.Clear();
+
+            int cardInnerW = _cardAttachments.Width > 48 ? _cardAttachments.Width - 36 : 530;
+
+            if (count == 0)
+            {
+                var lblEmpty = new Label
+                {
+                    Text = "No attachments for this ticket. Drag & drop logs or screenshots here, or click Add File / Paste Screenshot.",
+                    ForeColor = Color.FromArgb(130, 140, 150),
+                    Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+                    AutoSize = true,
+                    Margin = new Padding(0, 4, 0, 4)
+                };
+                _pnlDetailAttachmentsList.Controls.Add(lblEmpty);
+            }
+            else
+            {
+                foreach (var att in _currentTicket.Attachments)
+                {
+                    var attRow = CreateAttachmentDetailRow(att, cardInnerW);
+                    _pnlDetailAttachmentsList.Controls.Add(attRow);
+                }
+            }
+
+            _pnlDetailAttachmentsList.ResumeLayout();
+        }
+
+        private Control CreateAttachmentDetailRow(TicketAttachment att, int width)
+        {
+            var pnl = new Panel
+            {
+                Width = width,
+                Height = 44,
+                BackColor = Color.FromArgb(250, 251, 253),
+                Margin = new Padding(0, 0, 0, 6),
+                Padding = new Padding(8, 6, 8, 6)
+            };
+
+            pnl.Paint += (s, e) =>
+            {
+                using var p = new Pen(Color.FromArgb(226, 232, 240), 1);
+                e.Graphics.DrawRectangle(p, 0, 0, pnl.Width - 1, pnl.Height - 1);
+            };
+
+            string icon = att.IsImage ? "🖼️" : (att.IsLogOrText ? "📄" : "📎");
+
+            var lblIcon = new Label
+            {
+                Text = icon,
+                Font = new Font("Segoe UI", 11F),
+                AutoSize = true,
+                Location = new Point(8, 9)
+            };
+
+            var lblName = new Label
+            {
+                Text = att.FileName,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 102, 204),
+                AutoEllipsis = true,
+                Width = Math.Max(120, width - 260),
+                Location = new Point(34, 6),
+                Cursor = Cursors.Hand
+            };
+            lblName.Click += (s, e) => AttachmentStorageService.OpenAttachment(att);
+
+            var lblMeta = new Label
+            {
+                Text = $"{att.FormattedFileSize}  •  {att.CreatedAt:yyyy-MM-dd HH:mm} UTC",
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(120, 128, 140),
+                AutoSize = true,
+                Location = new Point(34, 24)
+            };
+
+            int btnRight = width - 8;
+
+            var btnDel = new Button
+            {
+                Text = "🗑",
+                Size = new Size(28, 26),
+                Location = new Point(btnRight - 28, 9),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(220, 53, 69),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnDel.FlatAppearance.BorderSize = 0;
+            btnDel.Click += (s, e) =>
+            {
+                var confirm = MessageBox.Show(this, $"Delete attachment \"{att.FileName}\"?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm == DialogResult.Yes)
+                {
+                    _dbService.DeleteAttachment(att.Id);
+                    RenderDetailAttachments();
+                    ApplyFilters();
+                }
+            };
+
+            var btnFolder = new Button
+            {
+                Text = "📁",
+                Size = new Size(28, 26),
+                Location = new Point(btnRight - 58, 9),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(70, 80, 95),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnFolder.FlatAppearance.BorderSize = 0;
+            btnFolder.Click += (s, e) => AttachmentStorageService.ShowInExplorer(att);
+
+            var btnOpen = new Button
+            {
+                Text = "Open",
+                Size = new Size(54, 26),
+                Location = new Point(btnRight - 116, 9),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 102, 204),
+                BackColor = Color.FromArgb(240, 246, 255),
+                Cursor = Cursors.Hand
+            };
+            btnOpen.FlatAppearance.BorderColor = Color.FromArgb(200, 220, 245);
+            btnOpen.Click += (s, e) => AttachmentStorageService.OpenAttachment(att);
+
+            pnl.Controls.Add(lblIcon);
+            pnl.Controls.Add(lblName);
+            pnl.Controls.Add(lblMeta);
+            pnl.Controls.Add(btnOpen);
+            pnl.Controls.Add(btnFolder);
+            pnl.Controls.Add(btnDel);
+
+            return pnl;
+        }
+
+        private void OnDetailAddAttachmentClicked()
+        {
+            if (_currentTicket == null) return;
+
+            using var ofd = new OpenFileDialog
+            {
+                Title = $"Attach Files to {_currentTicket.FormattedId}",
+                Multiselect = true,
+                Filter = "All Files (*.*)|*.*|Logs & Text (*.log;*.txt;*.json;*.xml;*.csv)|*.log;*.txt;*.json;*.xml;*.csv|Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp"
+            };
+
+            if (ofd.ShowDialog(this) == DialogResult.OK)
+            {
+                foreach (var file in ofd.FileNames)
+                {
+                    try
+                    {
+                        var att = AttachmentStorageService.SaveAttachmentFile(_currentTicket.Id, file);
+                        _dbService.AddAttachment(att);
+                        LogService.Success("Attachments", $"Attached {att.FileName} to {_currentTicket.FormattedId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(this, $"Failed to attach {Path.GetFileName(file)}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                RenderDetailAttachments();
+                ApplyFilters();
+            }
+        }
+
+        private void OnDetailPasteScreenshotClicked()
+        {
+            if (_currentTicket == null) return;
+
+            try
+            {
+                if (Clipboard.ContainsImage())
+                {
+                    using var img = Clipboard.GetImage();
+                    if (img != null)
+                    {
+                        using var ms = new MemoryStream();
+                        img.Save(ms, ImageFormat.Png);
+                        byte[] bytes = ms.ToArray();
+                        var att = AttachmentStorageService.SaveImageBytes(_currentTicket.Id, bytes);
+                        _dbService.AddAttachment(att);
+                        LogService.Success("Attachments", $"Pasted screenshot {att.FileName} into {_currentTicket.FormattedId}");
+                        RenderDetailAttachments();
+                        ApplyFilters();
+                        return;
+                    }
+                }
+
+                MessageBox.Show(this, "No image found in clipboard.\n\nTip: Use Windows Snipping Tool (Win+Shift+S) or copy an image first.", "No Clipboard Image", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Could not paste screenshot: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnDetailDragEnter(object? sender, DragEventArgs e)
+        {
+            if (_currentTicket != null && e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            {
+                e.Effect = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+        }
+
+        private void OnDetailDragDrop(object? sender, DragEventArgs e)
+        {
+            if (_currentTicket == null) return;
+            if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            {
+                var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                if (files != null)
+                {
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            var att = AttachmentStorageService.SaveAttachmentFile(_currentTicket.Id, file);
+                            _dbService.AddAttachment(att);
+                            LogService.Success("Attachments", $"Attached {att.FileName} to {_currentTicket.FormattedId}");
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show(this, $"Failed to attach {Path.GetFileName(file)}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+                    RenderDetailAttachments();
+                    ApplyFilters();
+                }
+            }
         }
 
         private void ChangeStatus(TicketStatus newStatus)
@@ -1150,6 +1458,138 @@ namespace KerkenezTicket.UI.Tabs
                     _lvTickets.Columns[i].Text = TicketColumnTitles[i];
                 }
             }
+        }
+
+        private void OnExportSingleTicketClicked()
+        {
+            if (_currentTicket == null) return;
+
+            var menu = new ContextMenuStrip();
+            string defaultFormatStr = _configService.Settings.DefaultExportFormat ?? "Zip";
+            ExportFormat defaultFormat = ParseExportFormat(defaultFormatStr);
+
+            var itemDefault = new ToolStripMenuItem($"⚡ Quick Export ({defaultFormatStr})", null, (s, e) =>
+            {
+                DoExportSingleTicket(_currentTicket, defaultFormat);
+            })
+            {
+                Font = new Font(menu.Font, FontStyle.Bold)
+            };
+            menu.Items.Add(itemDefault);
+            menu.Items.Add(new ToolStripSeparator());
+
+            menu.Items.Add(new ToolStripMenuItem("📦 Export as Zip Archive (.zip)", null, (s, e) =>
+            {
+                DoExportSingleTicket(_currentTicket, ExportFormat.Zip);
+            }));
+
+            menu.Items.Add(new ToolStripMenuItem("📁 Export as Folder Directory", null, (s, e) =>
+            {
+                DoExportSingleTicket(_currentTicket, ExportFormat.Folder);
+            }));
+
+            menu.Items.Add(new ToolStripMenuItem("📄 Export as Single Markdown File (.md)", null, (s, e) =>
+            {
+                DoExportSingleTicket(_currentTicket, ExportFormat.Markdown);
+            }));
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            menu.Items.Add(new ToolStripMenuItem("🌐 Export All Tickets with Index...", null, (s, e) =>
+            {
+                var allTickets = _dbService.GetAllTickets();
+                DoExportBatchTickets(allTickets, "All");
+            }));
+
+            menu.Items.Add(new ToolStripMenuItem("📂 Open Export Destination Folder", null, (s, e) =>
+            {
+                string dir = _configService.GetExportDirectory();
+                TicketExportService.RevealInExplorer(dir);
+            }));
+
+            menu.Show(_btnActionExport, new Point(0, _btnActionExport.Height + 2));
+        }
+
+        private void DoExportSingleTicket(TicketItem ticket, ExportFormat format)
+        {
+            try
+            {
+                // Ensure ticket has latest attachments
+                ticket.Attachments = _dbService.GetAttachmentsForTicket(ticket.Id);
+
+                string exportDir = _configService.GetExportDirectory();
+                string resultPath = TicketExportService.ExportTicket(ticket, exportDir, format);
+                LogService.Success("Export", $"Exported ticket {ticket.FormattedId} to: {resultPath}");
+
+                var res = MessageBox.Show(this,
+                    $"Ticket {ticket.FormattedId} successfully exported to:\n\n{resultPath}\n\nWould you like to open or reveal the exported item in Windows Explorer?",
+                    "Export Successful",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (res == DialogResult.Yes)
+                {
+                    TicketExportService.RevealInExplorer(resultPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Export failed: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LogService.Error("Export", $"Failed to export ticket {ticket.FormattedId}: {ex.Message}");
+            }
+        }
+
+        private void DoExportBatchTickets(List<TicketItem> tickets, string batchSuffix)
+        {
+            if (tickets.Count == 0)
+            {
+                MessageBox.Show(this, "There are no tickets to export.", "Export Tickets", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                // Ensure all tickets have attachments populated
+                var attMap = _dbService.GetAllAttachmentsGrouped();
+                foreach (var t in tickets)
+                {
+                    if (attMap.TryGetValue(t.Id, out var atts))
+                    {
+                        t.Attachments = atts;
+                    }
+                }
+
+                string exportDir = _configService.GetExportDirectory();
+                var defaultFormat = ParseExportFormat(_configService.Settings.DefaultExportFormat);
+                string batchName = $"KT_Batch_{batchSuffix}_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+                string resultPath = TicketExportService.ExportBatchTickets(tickets, exportDir, defaultFormat, batchName);
+                LogService.Success("Export", $"Batch exported {tickets.Count} tickets to: {resultPath}");
+
+                var res = MessageBox.Show(this,
+                    $"Successfully exported {tickets.Count} tickets with INDEX.md catalog to:\n\n{resultPath}\n\nWould you like to open or reveal the exported item in Windows Explorer?",
+                    "Batch Export Successful",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (res == DialogResult.Yes)
+                {
+                    TicketExportService.RevealInExplorer(resultPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Batch export failed: {ex.Message}", "Batch Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LogService.Error("Export", $"Failed to batch export tickets: {ex.Message}");
+            }
+        }
+
+        private static ExportFormat ParseExportFormat(string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format)) return ExportFormat.Zip;
+            if (string.Equals(format, "Folder", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Folder;
+            if (string.Equals(format, "Markdown", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "md", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Markdown;
+            return ExportFormat.Zip;
         }
     }
 }

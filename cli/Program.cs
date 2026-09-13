@@ -74,6 +74,19 @@ namespace KerkenezTicket.CLI
                     case "backup":
                         return HandleExport(args.Skip(1).ToArray());
 
+                    case "export-readable":
+                    case "export-md":
+                    case "md-export":
+                        return HandleExportReadable(args.Skip(1).ToArray());
+
+                    case "attach":
+                        return HandleAttach(args.Skip(1).ToArray());
+
+                    case "delete":
+                    case "del":
+                    case "rm":
+                        return HandleDelete(args.Skip(1).ToArray());
+
                     case "register":
                     case "install":
                         return HandleRegister();
@@ -132,6 +145,7 @@ namespace KerkenezTicket.CLI
             string desc = "";
             string status = "todo";
             var tags = new List<string>();
+            var attachFiles = new List<string>();
 
             int i = 0;
             if (!args[0].StartsWith("-"))
@@ -181,6 +195,16 @@ namespace KerkenezTicket.CLI
                         }
                         i += 2;
                         break;
+                    case "--attach":
+                    case "-att":
+                    case "-f":
+                    case "--file":
+                        if (!string.IsNullOrWhiteSpace(next))
+                        {
+                            attachFiles.Add(next.Trim());
+                        }
+                        i += 2;
+                        break;
                     default:
                         if (string.IsNullOrEmpty(title))
                         {
@@ -212,6 +236,32 @@ namespace KerkenezTicket.CLI
 
             var created = db.AddTicket(ticket);
 
+            // Attach files if provided
+            foreach (var f in attachFiles)
+            {
+                if (File.Exists(f))
+                {
+                    try
+                    {
+                        var att = AttachmentStorageService.SaveAttachmentFile(created.Id, f);
+                        db.AddAttachment(att);
+                        created.Attachments.Add(att);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"  [WARN] Failed to attach {f}: {ex.Message}");
+                        Console.ResetColor();
+                    }
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"  [WARN] Attachment file not found: {f}");
+                    Console.ResetColor();
+                }
+            }
+
             Console.ForegroundColor = ConsoleColor.Green;
             Console.Write("[SUCCESS] ");
             Console.ResetColor();
@@ -225,6 +275,14 @@ namespace KerkenezTicket.CLI
             if (created.Tags != null && created.Tags.Count > 0)
             {
                 Console.WriteLine($"  Tags:     {string.Join(", ", created.Tags)}");
+            }
+            if (created.Attachments != null && created.Attachments.Count > 0)
+            {
+                Console.WriteLine($"  Attachments ({created.Attachments.Count}):");
+                foreach (var a in created.Attachments)
+                {
+                    Console.WriteLine($"    - {a.FileName} ({a.FormattedFileSize})");
+                }
             }
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine($"  Storage:  %APPDATA%\\Kerkenez\\ticket\\tickets.db (DPAPI Encrypted)");
@@ -395,9 +453,120 @@ namespace KerkenezTicket.CLI
                 Console.WriteLine("Notes / History:");
                 Console.WriteLine(ticket.Notes);
             }
+            if (ticket.Attachments != null && ticket.Attachments.Count > 0)
+            {
+                Console.WriteLine(new string('-', 50));
+                Console.WriteLine($"Attachments ({ticket.Attachments.Count}):");
+                foreach (var a in ticket.Attachments)
+                {
+                    Console.WriteLine($"  - {a.FileName,-30} {a.FormattedFileSize,10}   [{a.CreatedAt:yyyy-MM-dd HH:mm}]");
+                }
+            }
             Console.WriteLine();
 
             return 0;
+        }
+
+        private static int HandleAttach(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("Usage: kticket attach <id|number> <file_path>");
+                Console.ResetColor();
+                return 1;
+            }
+
+            string ticketId = args[0];
+            string filePath = args[1];
+
+            if (!File.Exists(filePath))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Error: File not found: {filePath}");
+                Console.ResetColor();
+                return 1;
+            }
+
+            var db = new TicketDatabaseService();
+            var ticket = db.GetTicketById(ticketId);
+            if (ticket == null)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Error: Ticket not found: {ticketId}");
+                Console.ResetColor();
+                return 1;
+            }
+
+            try
+            {
+                var att = AttachmentStorageService.SaveAttachmentFile(ticket.Id, filePath);
+                db.AddAttachment(att);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write("[SUCCESS] ");
+                Console.ResetColor();
+                Console.WriteLine($"Attached {att.FileName} ({att.FormattedFileSize}) to ticket {ticket.FormattedId}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[ERROR] Failed to attach file: {ex.Message}");
+                Console.ResetColor();
+                return 1;
+            }
+        }
+
+        private static int HandleDelete(string[] args)
+        {
+            if (args.Length == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("Usage: kticket delete <id|number> [--yes]");
+                Console.ResetColor();
+                return 1;
+            }
+
+            string id = args[0];
+            bool autoYes = args.Any(a => a.Equals("--yes", StringComparison.OrdinalIgnoreCase) || a.Equals("-y", StringComparison.OrdinalIgnoreCase));
+
+            var db = new TicketDatabaseService();
+            var ticket = db.GetTicketById(id);
+            if (ticket == null)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Error: Ticket not found: {id}");
+                Console.ResetColor();
+                return 1;
+            }
+
+            if (!autoYes)
+            {
+                Console.Write($"Are you sure you want to permanently delete ticket {ticket.FormattedId} (\"{ticket.Title}\")? [y/N]: ");
+                string? answer = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(answer) || !answer.Trim().Equals("y", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("Cancelled.");
+                    return 0;
+                }
+            }
+
+            bool ok = db.DeleteTicket(ticket.Id);
+            if (ok)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[SUCCESS] Permanently deleted ticket {ticket.FormattedId} and its attachments.");
+                Console.ResetColor();
+                return 0;
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[ERROR] Failed to delete ticket {ticket.FormattedId}");
+                Console.ResetColor();
+                return 1;
+            }
         }
 
         private static int HandleStatus(string[] args)
@@ -456,6 +625,11 @@ namespace KerkenezTicket.CLI
 
         private static int HandleExport(string[] args)
         {
+            if (args.Any(a => string.Equals(a, "--readable", StringComparison.OrdinalIgnoreCase) || string.Equals(a, "-r", StringComparison.OrdinalIgnoreCase)))
+            {
+                return HandleExportReadable(args.Where(a => !string.Equals(a, "--readable", StringComparison.OrdinalIgnoreCase) && !string.Equals(a, "-r", StringComparison.OrdinalIgnoreCase)).ToArray());
+            }
+
             var db = new TicketDatabaseService();
             var config = new ConfigService();
             var backupService = new BackupService(db, config);
@@ -469,6 +643,150 @@ namespace KerkenezTicket.CLI
             Console.WriteLine($"  {path}");
 
             return 0;
+        }
+
+        private static int HandleExportReadable(string[] args)
+        {
+            var db = new TicketDatabaseService();
+            var config = new ConfigService();
+
+            string? targetId = null;
+            bool exportAll = false;
+            string? outputDir = null;
+            string? formatStr = null;
+            bool openExplorer = false;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                string arg = args[i];
+                if (arg.Equals("--all", StringComparison.OrdinalIgnoreCase) || arg.Equals("-all", StringComparison.OrdinalIgnoreCase))
+                {
+                    exportAll = true;
+                }
+                else if (arg.Equals("-o", StringComparison.OrdinalIgnoreCase) || arg.Equals("--output", StringComparison.OrdinalIgnoreCase) || arg.Equals("--dir", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        outputDir = args[++i];
+                    }
+                }
+                else if (arg.Equals("-f", StringComparison.OrdinalIgnoreCase) || arg.Equals("--format", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        formatStr = args[++i];
+                    }
+                }
+                else if (arg.Equals("--open", StringComparison.OrdinalIgnoreCase))
+                {
+                    openExplorer = true;
+                }
+                else if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || arg.Equals("-h", StringComparison.OrdinalIgnoreCase))
+                {
+                    PrintExportReadableHelp();
+                    return 0;
+                }
+                else if (!arg.StartsWith("-") && targetId == null)
+                {
+                    targetId = arg;
+                }
+            }
+
+            string destination = !string.IsNullOrWhiteSpace(outputDir)
+                ? Path.GetFullPath(outputDir)
+                : config.GetExportDirectory();
+
+            ExportFormat format = ParseExportFormat(formatStr ?? config.Settings.DefaultExportFormat);
+
+            if (exportAll || (targetId == null && args.Length == 0))
+            {
+                var allTickets = db.GetAllTickets();
+                if (allTickets.Count == 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("[INFO] No tickets found in database to export.");
+                    Console.ResetColor();
+                    return 0;
+                }
+
+                Console.WriteLine($"Exporting {allTickets.Count} tickets to human-readable format...");
+                string result = TicketExportService.ExportBatchTickets(allTickets, destination, format);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[SUCCESS] Batch tickets exported successfully!");
+                Console.ResetColor();
+                Console.WriteLine($"  Destination: {result}");
+                Console.WriteLine($"  Format:      {format}");
+                Console.WriteLine($"  Count:       {allTickets.Count} tickets (with INDEX.md catalog)");
+
+                if (openExplorer)
+                {
+                    TicketExportService.RevealInExplorer(result);
+                }
+                return 0;
+            }
+
+            if (targetId != null)
+            {
+                var ticket = db.GetTicketById(targetId);
+                if (ticket == null)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Ticket not found: {targetId}");
+                    Console.ResetColor();
+                    return 1;
+                }
+
+                Console.WriteLine($"Exporting ticket {ticket.FormattedId}: \"{ticket.Title}\"...");
+                string result = TicketExportService.ExportTicket(ticket, destination, format);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[SUCCESS] Ticket {ticket.FormattedId} exported successfully!");
+                Console.ResetColor();
+                Console.WriteLine($"  Destination: {result}");
+                Console.WriteLine($"  Format:      {format}");
+                Console.WriteLine($"  Attachments: {ticket.AttachmentCount}");
+
+                if (openExplorer)
+                {
+                    TicketExportService.RevealInExplorer(result);
+                }
+                return 0;
+            }
+
+            PrintExportReadableHelp();
+            return 1;
+        }
+
+        private static ExportFormat ParseExportFormat(string? format)
+        {
+            if (string.IsNullOrWhiteSpace(format)) return ExportFormat.Zip;
+            if (string.Equals(format, "Folder", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "dir", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Folder;
+            if (string.Equals(format, "Markdown", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "md", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Markdown;
+            return ExportFormat.Zip;
+        }
+
+        private static void PrintExportReadableHelp()
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("Usage: kticket export-readable [ticketId|--all] [options]");
+            Console.ResetColor();
+            Console.WriteLine("  Exports ticket(s) into clean human-readable Markdown format.");
+            Console.WriteLine("  If attachments exist, bundles them in an attachments/ directory or .zip archive.");
+            Console.WriteLine();
+            Console.WriteLine("Options:");
+            Console.WriteLine("  <ticketId>              Ticket ID or number to export (e.g. KT-1, 1)");
+            Console.WriteLine("  --all                   Export all tickets in database with an INDEX.md catalog");
+            Console.WriteLine("  -o, --output <dir>      Destination folder (defaults to configured export location)");
+            Console.WriteLine("  -f, --format <format>   zip | folder | md (defaults to setting in config.json)");
+            Console.WriteLine("  --open                  Reveal or open the exported item in Windows Explorer");
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Examples:");
+            Console.WriteLine("  kticket export-readable KT-1");
+            Console.WriteLine("  kticket export-readable KT-1 --format folder");
+            Console.WriteLine("  kticket export-readable --all -o C:\\Reports\\Tickets --open");
+            Console.ResetColor();
         }
 
         private static int HandleRegister()
@@ -512,7 +830,9 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  kticket kill <id|number>");
             Console.WriteLine("  kticket note <id|number> \"<text>\"");
             Console.WriteLine("  kticket edit <id|number>");
+            Console.WriteLine("  kticket attach <id|number> <file_path>");
             Console.WriteLine("  kticket export [filepath]");
+            Console.WriteLine("  kticket export-readable [id|--all] [-o <dir>] [-f zip|folder|md]");
             Console.WriteLine("  kticket register");
             Console.WriteLine("  kticket uninstall [--yes]");
             Console.WriteLine("  kticket help");
@@ -524,14 +844,19 @@ namespace KerkenezTicket.CLI
             Console.WriteLine("  -d, --desc <text>       Detailed description");
             Console.WriteLine("  -s, --status <status>   backlog | todo | doing | done | killed");
             Console.WriteLine("  --tag <tags>            Comma-separated tags");
+            Console.WriteLine("  --attach, -f <file>     Attach a log file, screenshot, or document");
             Console.WriteLine();
-            Console.WriteLine("Note/Edit:");
-            Console.WriteLine("  kticket note <id> \"text\"   Append a timestamped note to a ticket");
-            Console.WriteLine("  kticket edit <id>           Open ticket notes in $EDITOR or notepad");
+            Console.WriteLine("Note/Edit/Attach:");
+            Console.WriteLine("  kticket note <id> \"text\"     Append a timestamped note to a ticket");
+            Console.WriteLine("  kticket edit <id>             Open ticket notes in $EDITOR or notepad");
+            Console.WriteLine("  kticket attach <id> <file>    Attach a log, screenshot, or file to a ticket");
             Console.WriteLine();
             Console.WriteLine("Examples:");
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("  kticket add \"fix a refresh error sync on x situation\" -a myapp -p high -t sync");
+            Console.WriteLine("  kticket add \"fix a refresh error sync on x situation\" -a myapp -p high -t sync --attach ./error.log");
+            Console.WriteLine("  kticket attach KT-3 ./crash.dump");
+            Console.WriteLine("  kticket export-readable KT-3 --open");
+            Console.WriteLine("  kticket export-readable --all -f zip");
             Console.WriteLine("  kticket note 3 \"stack trace: NullRef at Foo.Bar() line 42\"");
             Console.WriteLine("  kticket edit KT-3");
             Console.ResetColor();

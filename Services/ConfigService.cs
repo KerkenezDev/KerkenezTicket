@@ -19,6 +19,10 @@ namespace KerkenezTicket.Services
 
         public static readonly string BackupsFolder = Path.Combine(AppDataFolder, "backups");
 
+        public static readonly string AttachmentsFolder = Path.Combine(AppDataFolder, "attachments");
+
+        public static readonly string DefaultExportsFolder = Path.Combine(AppDataFolder, "exports");
+
         public static readonly string TempFolder = Path.Combine(
             Path.GetTempPath(),
             "Kerkenez", "ticket");
@@ -41,6 +45,28 @@ namespace KerkenezTicket.Services
             Settings = LoadConfig();
         }
 
+        public string GetExportDirectory()
+        {
+            if (!string.IsNullOrWhiteSpace(Settings.ExportDirectory))
+            {
+                try
+                {
+                    if (!Directory.Exists(Settings.ExportDirectory))
+                    {
+                        Directory.CreateDirectory(Settings.ExportDirectory);
+                    }
+                    return Settings.ExportDirectory;
+                }
+                catch { }
+            }
+
+            if (!Directory.Exists(DefaultExportsFolder))
+            {
+                Directory.CreateDirectory(DefaultExportsFolder);
+            }
+            return DefaultExportsFolder;
+        }
+
         public static void EnsureDirectories()
         {
             try
@@ -58,6 +84,16 @@ namespace KerkenezTicket.Services
                 if (!Directory.Exists(BackupsFolder))
                 {
                     Directory.CreateDirectory(BackupsFolder);
+                }
+
+                if (!Directory.Exists(AttachmentsFolder))
+                {
+                    Directory.CreateDirectory(AttachmentsFolder);
+                }
+
+                if (!Directory.Exists(DefaultExportsFolder))
+                {
+                    Directory.CreateDirectory(DefaultExportsFolder);
                 }
 
                 if (!Directory.Exists(TempFolder))
