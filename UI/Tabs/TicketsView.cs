@@ -93,6 +93,8 @@ namespace KerkenezTicket.UI.Tabs
 
         private TicketItem? _currentTicket;
         private List<TicketItem> _loadedTickets = new List<TicketItem>();
+        private Dictionary<string, string> _appDisplayNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, Color> _appColorCache = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
 
         public event Action? CreateTicketRequested;
         public event Action<string, string>? StatusUpdated;
@@ -280,8 +282,12 @@ namespace KerkenezTicket.UI.Tabs
                 Padding = new Padding(0)
             };
 
-            // Spacer ImageList for comfortable touchable row height (28px)
-            _spacerImageList = new ImageList { ImageSize = new Size(1, 26) };
+            // Spacer ImageList for comfortable touchable row height (28px) and app color vertical strips
+            _spacerImageList = new ImageList
+            {
+                ImageSize = new Size(6, 22),
+                ColorDepth = ColorDepth.Depth32Bit
+            };
 
             _lvTickets = new ListView
             {
@@ -705,6 +711,15 @@ namespace KerkenezTicket.UI.Tabs
             string? type = _selectedTypeFilter.Equals("all types", StringComparison.OrdinalIgnoreCase) || _selectedTypeFilter.Equals("all", StringComparison.OrdinalIgnoreCase) ? null : _selectedTypeFilter;
             string? search = string.IsNullOrWhiteSpace(_txtSearch.Text) ? null : _txtSearch.Text;
 
+            _appDisplayNames = _dbService.GetAppDisplayNameMap();
+            var colorMap = _dbService.GetAppColorMap();
+            _appColorCache.Clear();
+            foreach (var kvp in colorMap)
+            {
+                _appColorCache[kvp.Key] = ParseColor(kvp.Value, Color.FromArgb(0, 120, 215));
+            }
+            EnsureAppStripImages();
+
             _loadedTickets = _dbService.GetFilteredTickets(app, type, _selectedStatusFilter, search);
 
             if (_sortColumn >= 0 && _sortState != SortState.Default)
@@ -721,8 +736,8 @@ namespace KerkenezTicket.UI.Tabs
                         : _loadedTickets.OrderBy(t => (int)t.Priority).ThenBy(t => t.TicketNumber).ToList(),
 
                     2 => desc // App
-                        ? _loadedTickets.OrderByDescending(t => t.App, StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
-                        : _loadedTickets.OrderBy(t => t.App, StringComparer.OrdinalIgnoreCase).ThenBy(t => t.TicketNumber).ToList(),
+                        ? _loadedTickets.OrderByDescending(t => GetAppDisplayName(t.App), StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
+                        : _loadedTickets.OrderBy(t => GetAppDisplayName(t.App), StringComparer.OrdinalIgnoreCase).ThenBy(t => t.TicketNumber).ToList(),
 
                     3 => desc // Type
                         ? _loadedTickets.OrderByDescending(t => t.TicketType, StringComparer.OrdinalIgnoreCase).ThenByDescending(t => t.TicketNumber).ToList()
@@ -769,12 +784,13 @@ namespace KerkenezTicket.UI.Tabs
                     .Where(x => !string.IsNullOrWhiteSpace(x));
 
                 var orderedApps = (_sortColumn == 2 && _sortState == SortState.Descending)
-                    ? allApps.OrderByDescending(x => x, StringComparer.OrdinalIgnoreCase)
-                    : allApps.OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+                    ? allApps.OrderByDescending(x => GetAppDisplayName(x), StringComparer.OrdinalIgnoreCase)
+                    : allApps.OrderBy(x => GetAppDisplayName(x), StringComparer.OrdinalIgnoreCase);
 
                 foreach (var a in orderedApps)
                 {
-                    var grp = new ListViewGroup(a, $"📱  {a}");
+                    string disp = GetAppDisplayName(a);
+                    var grp = new ListViewGroup(a, $"📱  {disp}");
                     groupMap[a.ToLowerInvariant()] = grp;
                     _lvTickets.Groups.Add(grp);
                 }
@@ -783,30 +799,44 @@ namespace KerkenezTicket.UI.Tabs
             foreach (var ticket in _loadedTickets)
             {
                 var lvi = new ListViewItem(ticket.FormattedId);
-                lvi.SubItems.Add(ticket.Priority.ToDisplayName());
-                lvi.SubItems.Add(ticket.App);
-                lvi.SubItems.Add(ticket.TicketType);
-                string titleDisplay = ticket.AttachmentCount > 0 ? $"📎 {ticket.Title}" : ticket.Title;
-                lvi.SubItems.Add(titleDisplay);
-                lvi.SubItems.Add(ticket.UpdatedAt.ToString("MM-dd HH:mm"));
-                lvi.Tag = ticket;
+                lvi.UseItemStyleForSubItems = false;
 
-                // Priority coloring
-                switch (ticket.Priority)
-                {
-                    case TicketPriority.Urgent:
-                        lvi.ForeColor = Color.FromArgb(220, 38, 38);
-                        break;
-                    case TicketPriority.High:
-                        lvi.ForeColor = Color.FromArgb(217, 119, 6);
-                        break;
-                    case TicketPriority.Medium:
-                        lvi.ForeColor = Color.FromArgb(37, 99, 235);
-                        break;
-                    case TicketPriority.Low:
-                        lvi.ForeColor = Color.FromArgb(107, 114, 128);
-                        break;
-                }
+                string appKey = string.IsNullOrWhiteSpace(ticket.App) ? "general" : ticket.App;
+                string appKeyLower = appKey.ToLowerInvariant();
+                lvi.ImageKey = _spacerImageList.Images.ContainsKey(appKeyLower) ? appKeyLower : "default";
+
+                Color appColor = GetAppColor(ticket.App);
+                Color readableAppColor = EnsureReadableColor(appColor);
+                Color priorityColor = ticket.Priority.GetBadgeColor();
+
+                // SubItem 0: ID
+                lvi.SubItems[0].ForeColor = Color.FromArgb(30, 41, 59);
+                lvi.SubItems[0].Font = new Font(_lvTickets.Font, FontStyle.Bold);
+
+                // SubItem 1: Priority
+                var subPri = lvi.SubItems.Add(ticket.Priority.ToDisplayName());
+                subPri.ForeColor = priorityColor;
+                subPri.Font = new Font(_lvTickets.Font, FontStyle.Bold);
+
+                // SubItem 2: App (styled in app's signature color)
+                var subApp = lvi.SubItems.Add(GetAppDisplayName(ticket.App));
+                subApp.ForeColor = readableAppColor;
+                subApp.Font = new Font(_lvTickets.Font, FontStyle.Bold);
+
+                // SubItem 3: Type (styled in type color)
+                var subType = lvi.SubItems.Add(ticket.TicketType);
+                subType.ForeColor = TicketTypeHelper.GetTypeColor(ticket.TicketType);
+
+                // SubItem 4: Title
+                string titleDisplay = ticket.AttachmentCount > 0 ? $"📎 {ticket.Title}" : ticket.Title;
+                var subTitle = lvi.SubItems.Add(titleDisplay);
+                subTitle.ForeColor = Color.FromArgb(17, 24, 39);
+
+                // SubItem 5: Updated
+                var subDate = lvi.SubItems.Add(ticket.UpdatedAt.ToString("MM-dd HH:mm"));
+                subDate.ForeColor = Color.FromArgb(100, 116, 139);
+
+                lvi.Tag = ticket;
 
                 // Assign to group if enabled
                 if (groupMap.Count > 0)
@@ -821,7 +851,8 @@ namespace KerkenezTicket.UI.Tabs
                     }
                     else if (string.Equals(grouping, "App", StringComparison.OrdinalIgnoreCase))
                     {
-                        var newGrp = new ListViewGroup(key, $"📱  {key}");
+                        string disp = GetAppDisplayName(key);
+                        var newGrp = new ListViewGroup(key, $"📱  {disp}");
                         groupMap[key] = newGrp;
                         _lvTickets.Groups.Add(newGrp);
                         lvi.Group = newGrp;
@@ -934,10 +965,16 @@ namespace KerkenezTicket.UI.Tabs
             _lblPriorityBadge.ForeColor = ticket.Priority.GetBadgeColor();
             _lblPriorityBadge.BackColor = ticket.Priority.GetBadgeBgColor();
 
+            Color appColor = GetAppColor(ticket.App);
+            Color readableAppColor = EnsureReadableColor(appColor);
             _lblAppBadge.Visible = true;
-            _lblAppBadge.Text = ticket.App;
-            _lblAppBadge.ForeColor = Color.FromArgb(0, 102, 204);
-            _lblAppBadge.BackColor = Color.FromArgb(235, 245, 255);
+            _lblAppBadge.Text = GetAppDisplayName(ticket.App);
+            _lblAppBadge.ForeColor = readableAppColor;
+            _lblAppBadge.BackColor = Color.FromArgb(
+                Math.Clamp((int)(255 * 0.88 + appColor.R * 0.12), 0, 255),
+                Math.Clamp((int)(255 * 0.88 + appColor.G * 0.12), 0, 255),
+                Math.Clamp((int)(255 * 0.88 + appColor.B * 0.12), 0, 255)
+            );
 
             _lblTypeBadge.Visible = true;
             _lblTypeBadge.Text = ticket.TicketType;
@@ -1590,6 +1627,102 @@ namespace KerkenezTicket.UI.Tabs
             if (string.Equals(format, "Folder", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Folder;
             if (string.Equals(format, "Markdown", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "md", StringComparison.OrdinalIgnoreCase)) return ExportFormat.Markdown;
             return ExportFormat.Zip;
+        }
+
+        private string GetAppDisplayName(string? appKey)
+        {
+            if (string.IsNullOrWhiteSpace(appKey)) return "general";
+            if (_appDisplayNames.TryGetValue(appKey, out string? disp) && !string.IsNullOrWhiteSpace(disp))
+            {
+                return disp;
+            }
+            return appKey;
+        }
+
+        private Color GetAppColor(string? appKey)
+        {
+            if (string.IsNullOrWhiteSpace(appKey)) appKey = "general";
+            if (_appColorCache.TryGetValue(appKey, out var color))
+            {
+                return color;
+            }
+
+            string hex = _dbService.GetAppColorHex(appKey);
+            Color parsed = ParseColor(hex, Color.FromArgb(0, 120, 215));
+            _appColorCache[appKey] = parsed;
+            return parsed;
+        }
+
+        private void EnsureAppStripImages()
+        {
+            if (_spacerImageList == null) return;
+
+            _spacerImageList.Images.Clear();
+            _spacerImageList.Images.Add("default", CreateColorStripBitmap(Color.FromArgb(160, 174, 192)));
+
+            foreach (var kvp in _appColorCache)
+            {
+                string key = kvp.Key.ToLowerInvariant();
+                _spacerImageList.Images.Add(key, CreateColorStripBitmap(kvp.Value));
+            }
+        }
+
+        private static Bitmap CreateColorStripBitmap(Color color)
+        {
+            int w = 6;
+            int h = 22;
+            var bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var g = Graphics.FromImage(bmp);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            g.Clear(Color.Transparent);
+
+            using var brush = new SolidBrush(color);
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
+            int x = 1;
+            int y = 1;
+            int diameter = 4;
+            int height = h - 2;
+
+            path.AddArc(x, y, diameter, diameter, 180, 180);
+            path.AddArc(x, y + height - diameter, diameter, diameter, 0, 180);
+            path.CloseFigure();
+
+            g.FillPath(brush, path);
+            return bmp;
+        }
+
+        public static Color EnsureReadableColor(Color c)
+        {
+            double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+            if (luminance > 0.65)
+            {
+                double factor = 0.65 / luminance;
+                return Color.FromArgb(
+                    Math.Clamp((int)(c.R * factor), 0, 255),
+                    Math.Clamp((int)(c.G * factor), 0, 255),
+                    Math.Clamp((int)(c.B * factor), 0, 255)
+                );
+            }
+            return c;
+        }
+
+        public static Color ParseColor(string? hex, Color fallback)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return fallback;
+            try
+            {
+                string clean = hex.Trim();
+                if (!clean.StartsWith("#") && (clean.Length == 6 || clean.Length == 8 || clean.Length == 3))
+                {
+                    clean = "#" + clean;
+                }
+                return ColorTranslator.FromHtml(clean);
+            }
+            catch
+            {
+                return fallback;
+            }
         }
     }
 }

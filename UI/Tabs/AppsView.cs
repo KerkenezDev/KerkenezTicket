@@ -50,7 +50,8 @@ namespace KerkenezTicket.UI.Tabs
         private TextBox _txtAppDesc = null!;
         private Button _btnSaveApp = null!;
         private Button _btnDeleteApp = null!;
-        private FlowLayoutPanel _pnlAppColorPresets = null!;
+        private Panel _pnlAppColorSwatch = null!;
+        private Button _btnPickAppColor = null!;
 
         // ================= Right Form: Types =================
         private FlowLayoutPanel _cardType = null!;
@@ -58,7 +59,8 @@ namespace KerkenezTicket.UI.Tabs
         private TextBox _txtTypeColorHex = null!;
         private Button _btnSaveType = null!;
         private Button _btnDeleteType = null!;
-        private FlowLayoutPanel _pnlTypeColorPresets = null!;
+        private Panel _pnlTypeColorSwatch = null!;
+        private Button _btnPickTypeColor = null!;
 
         public event Action? AppsChanged;
 
@@ -396,39 +398,85 @@ namespace KerkenezTicket.UI.Tabs
             card.Controls.Add(lblDisp);
             card.Controls.Add(_txtAppDisplayName);
 
-            // Color Hex & Preset Palette
+            // Badge Color, Live Swatch & Windows Color Picker
             var lblColor = new Label { Text = "Badge Color:", Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), ForeColor = Color.FromArgb(50, 50, 50), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
-            _txtAppColorHex = new TextBox { Width = 110, Height = 28, Font = new Font("Segoe UI", 9F), Text = "#0078D7", Margin = new Padding(0, 0, 0, 6) };
+            card.Controls.Add(lblColor);
 
-            _pnlAppColorPresets = new FlowLayoutPanel
+            var rowColor = new FlowLayoutPanel
             {
                 Width = 320,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
+                WrapContents = false,
                 Margin = new Padding(0, 0, 0, 10)
             };
 
-            string[] presetColors = new[] { "#0078D7", "#107C41", "#8764B8", "#D83B01", "#008272", "#E81123", "#00B294", "#6B7280" };
-            foreach (var col in presetColors)
+            _pnlAppColorSwatch = new Panel
             {
-                var pBtn = new Button
-                {
-                    Width = 24,
-                    Height = 24,
-                    BackColor = ColorTranslator.FromHtml(col),
-                    FlatStyle = FlatStyle.Flat,
-                    Margin = new Padding(0, 0, 6, 4),
-                    Cursor = Cursors.Hand
-                };
-                pBtn.FlatAppearance.BorderSize = 0;
-                pBtn.Click += (s, e) => _txtAppColorHex.Text = col;
-                _pnlAppColorPresets.Controls.Add(pBtn);
-            }
+                Width = 28,
+                Height = 28,
+                BackColor = ColorTranslator.FromHtml("#0078D7"),
+                BorderStyle = BorderStyle.FixedSingle,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 6, 0)
+            };
 
-            card.Controls.Add(lblColor);
-            card.Controls.Add(_txtAppColorHex);
-            card.Controls.Add(_pnlAppColorPresets);
+            _txtAppColorHex = new TextBox
+            {
+                Width = 95,
+                Height = 28,
+                Font = new Font("Segoe UI", 9F),
+                Text = "#0078D7",
+                CharacterCasing = CharacterCasing.Upper,
+                Margin = new Padding(0, 0, 6, 0)
+            };
+
+            _btnPickAppColor = new Button
+            {
+                Text = "🎨 Pick Color...",
+                AutoSize = true,
+                Height = 28,
+                Padding = new Padding(8, 0, 8, 0),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F),
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = Color.FromArgb(45, 55, 72),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0)
+            };
+            _btnPickAppColor.FlatAppearance.BorderColor = Color.FromArgb(215, 222, 230);
+
+            Action openAppColorDialog = () =>
+            {
+                using var dlg = new ColorDialog
+                {
+                    FullOpen = true,
+                    Color = ParseColor(_txtAppColorHex.Text, Color.FromArgb(0, 120, 215))
+                };
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    string hex = $"#{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}";
+                    _txtAppColorHex.Text = hex;
+                    _pnlAppColorSwatch.BackColor = dlg.Color;
+                }
+            };
+
+            _pnlAppColorSwatch.Click += (s, e) => openAppColorDialog();
+            _btnPickAppColor.Click += (s, e) => openAppColorDialog();
+
+            _txtAppColorHex.TextChanged += (s, e) =>
+            {
+                Color c = ParseColor(_txtAppColorHex.Text, Color.Empty);
+                if (c != Color.Empty)
+                {
+                    _pnlAppColorSwatch.BackColor = c;
+                }
+            };
+
+            rowColor.Controls.Add(_pnlAppColorSwatch);
+            rowColor.Controls.Add(_txtAppColorHex);
+            rowColor.Controls.Add(_btnPickAppColor);
+            card.Controls.Add(rowColor);
 
             // Description
             var lblDesc = new Label { Text = "Description:", Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), ForeColor = Color.FromArgb(50, 50, 50), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
@@ -519,39 +567,85 @@ namespace KerkenezTicket.UI.Tabs
             card.Controls.Add(lblName);
             card.Controls.Add(_txtTypeName);
 
-            // Badge Color
+            // Badge Color, Live Swatch & Windows Color Picker
             var lblColor = new Label { Text = "Badge Color:", Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), ForeColor = Color.FromArgb(50, 50, 50), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
-            _txtTypeColorHex = new TextBox { Width = 110, Height = 28, Font = new Font("Segoe UI", 9F), Text = "#D9534F", Margin = new Padding(0, 0, 0, 6) };
+            card.Controls.Add(lblColor);
 
-            _pnlTypeColorPresets = new FlowLayoutPanel
+            var rowColor = new FlowLayoutPanel
             {
                 Width = 320,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
+                WrapContents = false,
                 Margin = new Padding(0, 0, 0, 14)
             };
 
-            string[] presetColors = new[] { "#D9534F", "#0275D8", "#5BC0DE", "#F0AD4E", "#5CB85C", "#6F42C1", "#E83E8C", "#20C997" };
-            foreach (var col in presetColors)
+            _pnlTypeColorSwatch = new Panel
             {
-                var pBtn = new Button
-                {
-                    Width = 24,
-                    Height = 24,
-                    BackColor = ColorTranslator.FromHtml(col),
-                    FlatStyle = FlatStyle.Flat,
-                    Margin = new Padding(0, 0, 6, 4),
-                    Cursor = Cursors.Hand
-                };
-                pBtn.FlatAppearance.BorderSize = 0;
-                pBtn.Click += (s, e) => _txtTypeColorHex.Text = col;
-                _pnlTypeColorPresets.Controls.Add(pBtn);
-            }
+                Width = 28,
+                Height = 28,
+                BackColor = ColorTranslator.FromHtml("#D9534F"),
+                BorderStyle = BorderStyle.FixedSingle,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 6, 0)
+            };
 
-            card.Controls.Add(lblColor);
-            card.Controls.Add(_txtTypeColorHex);
-            card.Controls.Add(_pnlTypeColorPresets);
+            _txtTypeColorHex = new TextBox
+            {
+                Width = 95,
+                Height = 28,
+                Font = new Font("Segoe UI", 9F),
+                Text = "#D9534F",
+                CharacterCasing = CharacterCasing.Upper,
+                Margin = new Padding(0, 0, 6, 0)
+            };
+
+            _btnPickTypeColor = new Button
+            {
+                Text = "🎨 Pick Color...",
+                AutoSize = true,
+                Height = 28,
+                Padding = new Padding(8, 0, 8, 0),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F),
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = Color.FromArgb(45, 55, 72),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0)
+            };
+            _btnPickTypeColor.FlatAppearance.BorderColor = Color.FromArgb(215, 222, 230);
+
+            Action openTypeColorDialog = () =>
+            {
+                using var dlg = new ColorDialog
+                {
+                    FullOpen = true,
+                    Color = ParseColor(_txtTypeColorHex.Text, Color.FromArgb(217, 83, 79))
+                };
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    string hex = $"#{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}";
+                    _txtTypeColorHex.Text = hex;
+                    _pnlTypeColorSwatch.BackColor = dlg.Color;
+                }
+            };
+
+            _pnlTypeColorSwatch.Click += (s, e) => openTypeColorDialog();
+            _btnPickTypeColor.Click += (s, e) => openTypeColorDialog();
+
+            _txtTypeColorHex.TextChanged += (s, e) =>
+            {
+                Color c = ParseColor(_txtTypeColorHex.Text, Color.Empty);
+                if (c != Color.Empty)
+                {
+                    _pnlTypeColorSwatch.BackColor = c;
+                }
+            };
+
+            rowColor.Controls.Add(_pnlTypeColorSwatch);
+            rowColor.Controls.Add(_txtTypeColorHex);
+            rowColor.Controls.Add(_btnPickTypeColor);
+            card.Controls.Add(rowColor);
 
             // Action Buttons
             var rowBtns = new FlowLayoutPanel
@@ -672,7 +766,15 @@ namespace KerkenezTicket.UI.Tabs
             foreach (var app in categories)
             {
                 var lvi = new ListViewItem(app.Name);
-                lvi.SubItems.Add(app.DisplayName);
+                lvi.UseItemStyleForSubItems = false;
+
+                Color appColor = app.GetColor();
+                lvi.SubItems[0].ForeColor = appColor;
+                lvi.SubItems[0].Font = new Font(_lvApps.Font, FontStyle.Bold);
+
+                var subDisp = lvi.SubItems.Add(app.DisplayName);
+                subDisp.ForeColor = appColor;
+
                 lvi.SubItems.Add(app.OpenCount.ToString());
                 lvi.SubItems.Add(app.TotalCount.ToString());
                 lvi.SubItems.Add(app.Description);
@@ -703,6 +805,7 @@ namespace KerkenezTicket.UI.Tabs
                 _txtAppName.Text = app.Name;
                 _txtAppDisplayName.Text = app.DisplayName;
                 _txtAppColorHex.Text = app.ColorHex;
+                _pnlAppColorSwatch.BackColor = app.GetColor();
                 _txtAppDesc.Text = app.Description;
             }
         }
@@ -713,6 +816,7 @@ namespace KerkenezTicket.UI.Tabs
             {
                 _txtTypeName.Text = t.Name;
                 _txtTypeColorHex.Text = t.ColorHex;
+                _pnlTypeColorSwatch.BackColor = ParseColor(t.ColorHex, Color.FromArgb(217, 83, 79));
             }
         }
 
@@ -910,6 +1014,23 @@ namespace KerkenezTicket.UI.Tabs
                 {
                     _lvApps.Columns[i].Text = AppsColumnTitles[i];
                 }
+            }
+        }
+        public static Color ParseColor(string? hex, Color fallback)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return fallback;
+            try
+            {
+                string clean = hex.Trim();
+                if (!clean.StartsWith("#") && (clean.Length == 6 || clean.Length == 8 || clean.Length == 3))
+                {
+                    clean = "#" + clean;
+                }
+                return ColorTranslator.FromHtml(clean);
+            }
+            catch
+            {
+                return fallback;
             }
         }
     }

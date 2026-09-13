@@ -341,9 +341,11 @@ namespace KerkenezTicket.CLI
                 return 0;
             }
 
+            var appNames = db.GetAppDisplayNameMap();
+
             Console.WriteLine();
-            Console.WriteLine($"{"ID",-8} {"APP",-10} {"TYPE",-12} {"STATUS",-10} {"PRIORITY",-10} {"TITLE"}");
-            Console.WriteLine(new string('-', 85));
+            Console.WriteLine($"{"ID",-8} {"APP",-14} {"TYPE",-12} {"STATUS",-10} {"PRIORITY",-10} {"TITLE"}");
+            Console.WriteLine(new string('-', 89));
 
             foreach (var t in tickets)
             {
@@ -351,7 +353,9 @@ namespace KerkenezTicket.CLI
                 Console.Write($"{t.FormattedId,-8} ");
 
                 Console.ForegroundColor = ConsoleColor.White;
-                Console.Write($"{t.App,-10} ");
+                string appDisp = appNames.TryGetValue(t.App, out var dn) && !string.IsNullOrWhiteSpace(dn) ? dn : t.App;
+                if (appDisp.Length > 14) appDisp = appDisp.Substring(0, 13) + "…";
+                Console.Write($"{appDisp,-14} ");
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write($"{t.TicketType,-12} ");
@@ -432,7 +436,11 @@ namespace KerkenezTicket.CLI
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine($"=== {ticket.FormattedId}: {ticket.Title} ===");
             Console.ResetColor();
-            Console.WriteLine($"App:         {ticket.App}");
+            string appDisp = db.GetAppDisplayName(ticket.App);
+            string appLine = !string.Equals(appDisp, ticket.App, StringComparison.OrdinalIgnoreCase)
+                ? $"{appDisp} ({ticket.App})"
+                : ticket.App;
+            Console.WriteLine($"App:         {appLine}");
             Console.WriteLine($"Type:        {ticket.TicketType}");
             Console.WriteLine($"Status:      {ticket.Status.ToDisplayName()}");
             Console.WriteLine($"Priority:    {ticket.Priority.ToDisplayName()}");

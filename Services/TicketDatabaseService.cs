@@ -766,6 +766,108 @@ namespace KerkenezTicket.Services
             }
         }
 
+        public Dictionary<string, string> GetAppDisplayNameMap()
+        {
+            lock (_dbLock)
+            {
+                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT name, display_name FROM app_categories;";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        if (!reader.IsDBNull(0))
+                        {
+                            string name = reader.GetString(0).Trim();
+                            string display = (!reader.IsDBNull(1) && !string.IsNullOrWhiteSpace(reader.GetString(1)))
+                                ? reader.GetString(1).Trim()
+                                : name;
+                            dict[name] = display;
+                        }
+                    }
+                }
+                catch { }
+                return dict;
+            }
+        }
+
+        public string GetAppDisplayName(string? appKey)
+        {
+            if (string.IsNullOrWhiteSpace(appKey)) return "general";
+            lock (_dbLock)
+            {
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT display_name FROM app_categories WHERE lower(name) = lower(@name) LIMIT 1;";
+                    cmd.Parameters.AddWithValue("@name", appKey.Trim());
+                    var res = cmd.ExecuteScalar();
+                    if (res != null && res != DBNull.Value)
+                    {
+                        string display = res.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrWhiteSpace(display)) return display;
+                    }
+                }
+                catch { }
+                return appKey;
+            }
+        }
+
+        public Dictionary<string, string> GetAppColorMap()
+        {
+            lock (_dbLock)
+            {
+                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT name, color_hex FROM app_categories;";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        if (!reader.IsDBNull(0))
+                        {
+                            string name = reader.GetString(0).Trim();
+                            string color = (!reader.IsDBNull(1) && !string.IsNullOrWhiteSpace(reader.GetString(1)))
+                                ? reader.GetString(1).Trim()
+                                : "#0078D7";
+                            dict[name] = color;
+                        }
+                    }
+                }
+                catch { }
+                return dict;
+            }
+        }
+
+        public string GetAppColorHex(string? appKey)
+        {
+            if (string.IsNullOrWhiteSpace(appKey)) return "#0078D7";
+            lock (_dbLock)
+            {
+                try
+                {
+                    using var conn = CreateConnection();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT color_hex FROM app_categories WHERE lower(name) = lower(@name) LIMIT 1;";
+                    cmd.Parameters.AddWithValue("@name", appKey.Trim());
+                    var res = cmd.ExecuteScalar();
+                    if (res != null && res != DBNull.Value)
+                    {
+                        string color = res.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrWhiteSpace(color)) return color;
+                    }
+                }
+                catch { }
+                return "#0078D7";
+            }
+        }
+
         public (int Total, int Backlog, int Todo, int Doing, int Done, int Killed) GetStatistics(string? appFilter = null)
         {
             lock (_dbLock)
