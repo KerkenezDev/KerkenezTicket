@@ -135,7 +135,6 @@ namespace KerkenezTicket.UI.Tabs
 
                 _split.SplitterDistance = targetDist;
                 _configService.Settings.AppsSplitterDistance = _split.SplitterDistance;
-                LogService.Info("UI", $"Apps right sidebar width restored: {rightW}px");
             }
             catch (Exception ex)
             {

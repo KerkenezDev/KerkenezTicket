@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KerkenezTicket.Models;
 using KerkenezTicket.Services;
@@ -490,8 +491,9 @@ namespace KerkenezTicket.UI.Tabs
             _cardDescription = CreateCardContainer();
             _cardDescription.Controls.Add(CreateSectionHeader("📝  Description"));
 
-            _txtDetailDescription = new TextBox
+            _txtDetailDescription = new BubbleScrollTextBox
             {
+                TargetScrollControl = _pnlDetailScroll,
                 Multiline = true,
                 ReadOnly = true,
                 BackColor = Color.FromArgb(250, 251, 252),
@@ -509,8 +511,9 @@ namespace KerkenezTicket.UI.Tabs
             _cardNotes = CreateCardContainer();
             _cardNotes.Controls.Add(CreateSectionHeader("📋  Work Notes & History"));
 
-            _txtDetailNotes = new TextBox
+            _txtDetailNotes = new BubbleScrollTextBox
             {
+                TargetScrollControl = _pnlDetailScroll,
                 Multiline = true,
                 ReadOnly = true,
                 BackColor = Color.FromArgb(250, 251, 252),
@@ -532,8 +535,9 @@ namespace KerkenezTicket.UI.Tabs
                 Margin = new Padding(0)
             };
 
-            _txtNewNote = new TextBox
+            _txtNewNote = new BubbleScrollTextBox
             {
+                TargetScrollControl = _pnlDetailScroll,
                 Width = 460,
                 Font = new Font("Segoe UI", 9F),
                 PlaceholderText = "Add a quick update note to this ticket...",
@@ -2175,7 +2179,6 @@ namespace KerkenezTicket.UI.Tabs
 
                 _split.SplitterDistance = targetDist;
                 _configService.Settings.TicketsSplitterDistance = _split.SplitterDistance;
-                LogService.Info("UI", $"Right sidebar width restored: {rightW}px");
                 UpdateDetailLayout();
             }
             catch (Exception ex)
@@ -2528,6 +2531,100 @@ namespace KerkenezTicket.UI.Tabs
                 _selectionDebounceTimer.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        /// <summary>
+        /// A TextBox that checks vertical scroll limits and bubbles mouse wheel
+        /// messages up to a parent scrollable container when reached min/max scroll position or when unscrollable.
+        /// </summary>
+        private class BubbleScrollTextBox : TextBox
+        {
+            public ScrollableControl? TargetScrollControl { get; set; }
+
+            private const int WM_MOUSEWHEEL = 0x020A;
+            private const int SB_VERT = 1;
+            private const int SIF_ALL = 0x17;
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct SCROLLINFO
+            {
+                public int cbSize;
+                public int fMask;
+                public int nMin;
+                public int nMax;
+                public int nPage;
+                public int nPos;
+                public int nTrackPos;
+            }
+
+            [DllImport("user32.dll", SetLastError = true)]
+            private static extern bool GetScrollInfo(IntPtr hWnd, int fnBar, ref SCROLLINFO lpsi);
+
+            [DllImport("user32.dll")]
+            private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+            private bool CanScroll(int delta)
+            {
+                if (!this.Multiline || !this.IsHandleCreated) return false;
+
+                var si = new SCROLLINFO();
+                si.cbSize = Marshal.SizeOf<SCROLLINFO>();
+                si.fMask = SIF_ALL;
+
+                if (!GetScrollInfo(this.Handle, SB_VERT, ref si))
+                {
+                    return false;
+                }
+
+                if (si.nPage <= 0 || si.nMax <= si.nMin || si.nMax < (int)si.nPage)
+                {
+                    return false;
+                }
+
+                int maxPos = si.nMax - (int)si.nPage + 1;
+                if (delta > 0)
+                {
+                    return si.nPos > si.nMin;
+                }
+                else if (delta < 0)
+                {
+                    return si.nPos < maxPos;
+                }
+
+                return false;
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == WM_MOUSEWHEEL)
+                {
+                    short delta = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+                    if (CanScroll(delta))
+                    {
+                        base.WndProc(ref m);
+                        return;
+                    }
+
+                    if (TargetScrollControl != null && TargetScrollControl.IsHandleCreated)
+                    {
+                        int beforeY = -TargetScrollControl.AutoScrollPosition.Y;
+                        SendMessage(TargetScrollControl.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
+                        int afterY = -TargetScrollControl.AutoScrollPosition.Y;
+
+                        if (beforeY == afterY)
+                        {
+                            int scrollLines = SystemInformation.MouseWheelScrollLines;
+                            if (scrollLines <= 0) scrollLines = 3;
+                            int step = (delta / 120) * scrollLines * 24;
+                            int newY = Math.Max(0, beforeY - step);
+                            TargetScrollControl.AutoScrollPosition = new Point(-TargetScrollControl.AutoScrollPosition.X, newY);
+                        }
+                    }
+                    return;
+                }
+
+                base.WndProc(ref m);
+            }
         }
     }
 }
