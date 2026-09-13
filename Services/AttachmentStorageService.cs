@@ -26,6 +26,11 @@ namespace KerkenezTicket.Services
             return Path.Combine(BaseFolder, relativePath);
         }
 
+        public static string GetAttachmentFullPath(TicketAttachment attachment)
+        {
+            return GetFullPath(attachment.StoredRelativePath);
+        }
+
         public static TicketAttachment SaveAttachmentFile(string ticketId, string sourceFilePath, string? customFileName = null)
         {
             if (!File.Exists(sourceFilePath))

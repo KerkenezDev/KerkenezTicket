@@ -285,7 +285,7 @@ namespace KerkenezTicket.CLI
                 }
             }
             Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine($"  Storage:  %APPDATA%\\Kerkenez\\ticket\\tickets.db (DPAPI Encrypted)");
+            Console.WriteLine($"  Storage:  %APPDATA%\\Kerkenez\\ticket\\tickets.db");
             Console.ResetColor();
 
             return 0;
@@ -822,7 +822,7 @@ namespace KerkenezTicket.CLI
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================");
             Console.WriteLine(" Kerkenez Ticket CLI (kticket)");
-            Console.WriteLine(" Local-first DPAPI-encrypted ticket tracking");
+            Console.WriteLine(" Local-first ticket tracking");
             Console.WriteLine("==================================================");
             Console.ResetColor();
             Console.WriteLine();

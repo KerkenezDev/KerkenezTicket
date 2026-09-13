@@ -104,6 +104,9 @@ namespace KerkenezTicket.Services
 
                 // Ensure minimal clean defaults for apps and types
                 EnsureDefaultSeedData(conn);
+
+                // One-time migration: decrypt any legacy DPAPI encrypted tickets to plaintext
+                MigrateEncryptedTicketsToPlaintext(conn);
             }
         }
 
@@ -129,6 +132,61 @@ namespace KerkenezTicket.Services
                         ('Improvement', '#5CB85C');
                     ";
                     cmdSeedType.ExecuteNonQuery();
+                }
+            }
+            catch { }
+        }
+
+        private static void MigrateEncryptedTicketsToPlaintext(SqliteConnection conn)
+        {
+            try
+            {
+                using var selectCmd = conn.CreateCommand();
+                selectCmd.CommandText = "SELECT id, title_enc, description_enc, tags_enc, notes_enc FROM tickets;";
+                var updates = new List<(string Id, string Title, string Desc, string Tags, string Notes)>();
+
+                using (var reader = selectCmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string id = reader.GetString(0);
+                        string t = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                        string d = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                        string g = reader.IsDBNull(3) ? "" : reader.GetString(3);
+                        string n = reader.IsDBNull(4) ? "" : reader.GetString(4);
+
+                        string decT = TicketCryptoService.DecryptString(t);
+                        string decD = TicketCryptoService.DecryptString(d);
+                        string decG = TicketCryptoService.DecryptString(g);
+                        string decN = TicketCryptoService.DecryptString(n);
+
+                        if (decT != t || decD != d || decG != g || decN != n)
+                        {
+                            updates.Add((id, decT, decD, decG, decN));
+                        }
+                    }
+                }
+
+                if (updates.Count > 0)
+                {
+                    using var updateTx = conn.BeginTransaction();
+                    foreach (var u in updates)
+                    {
+                        using var upCmd = conn.CreateCommand();
+                        upCmd.Transaction = updateTx;
+                        upCmd.CommandText = @"
+                            UPDATE tickets 
+                            SET title_enc = @t, description_enc = @d, tags_enc = @g, notes_enc = @n 
+                            WHERE id = @id;
+                        ";
+                        upCmd.Parameters.AddWithValue("@id", u.Id);
+                        upCmd.Parameters.AddWithValue("@t", u.Title);
+                        upCmd.Parameters.AddWithValue("@d", u.Desc);
+                        upCmd.Parameters.AddWithValue("@g", u.Tags);
+                        upCmd.Parameters.AddWithValue("@n", u.Notes);
+                        upCmd.ExecuteNonQuery();
+                    }
+                    updateTx.Commit();
                 }
             }
             catch { }
@@ -184,12 +242,12 @@ namespace KerkenezTicket.Services
                 ticket.CreatedAt = DateTime.UtcNow;
                 ticket.UpdatedAt = DateTime.UtcNow;
 
-                // Encrypt sensitive fields using DPAPI
-                string titleEnc = TicketCryptoService.EncryptString(ticket.Title);
-                string descEnc = TicketCryptoService.EncryptString(ticket.Description);
+                // Store fields as standard readable text
+                string titleEnc = ticket.Title ?? "";
+                string descEnc = ticket.Description ?? "";
                 string tagsJson = JsonSerializer.Serialize(ticket.Tags ?? new List<string>());
-                string tagsEnc = TicketCryptoService.EncryptString(tagsJson);
-                string notesEnc = TicketCryptoService.EncryptString(ticket.Notes);
+                string tagsEnc = tagsJson;
+                string notesEnc = ticket.Notes ?? "";
 
                 using var cmd = conn.CreateCommand();
                 cmd.Transaction = transaction;
@@ -269,11 +327,11 @@ namespace KerkenezTicket.Services
                     ticket.KilledAt = null;
                 }
 
-                string titleEnc = TicketCryptoService.EncryptString(ticket.Title);
-                string descEnc = TicketCryptoService.EncryptString(ticket.Description);
+                string titleEnc = ticket.Title ?? "";
+                string descEnc = ticket.Description ?? "";
                 string tagsJson = JsonSerializer.Serialize(ticket.Tags ?? new List<string>());
-                string tagsEnc = TicketCryptoService.EncryptString(tagsJson);
-                string notesEnc = TicketCryptoService.EncryptString(ticket.Notes);
+                string tagsEnc = tagsJson;
+                string notesEnc = ticket.Notes ?? "";
 
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
@@ -333,6 +391,112 @@ namespace KerkenezTicket.Services
                     AttachmentStorageService.DeleteTicketAttachmentsFolder(id);
                 }
                 return deleted;
+            }
+        }
+
+        public int DeleteTickets(IEnumerable<string> ids)
+        {
+            var idList = ids.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+            if (idList.Count == 0) return 0;
+
+            lock (_dbLock)
+            {
+                using var conn = CreateConnection();
+                using var tx = conn.BeginTransaction();
+                int deletedCount = 0;
+
+                foreach (var id in idList)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM ticket_attachments WHERE ticket_id = @id; DELETE FROM tickets WHERE id = @id;";
+                    cmd.Parameters.AddWithValue("@id", id);
+                    if (cmd.ExecuteNonQuery() > 0)
+                    {
+                        deletedCount++;
+                    }
+                }
+
+                tx.Commit();
+
+                foreach (var id in idList)
+                {
+                    try
+                    {
+                        AttachmentStorageService.DeleteTicketAttachmentsFolder(id);
+                    }
+                    catch { }
+                }
+
+                return deletedCount;
+            }
+        }
+
+        public int UpdateTicketsStatus(IEnumerable<string> ids, TicketStatus newStatus)
+        {
+            var idList = ids.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+            if (idList.Count == 0) return 0;
+
+            lock (_dbLock)
+            {
+                using var conn = CreateConnection();
+                using var tx = conn.BeginTransaction();
+                int updatedCount = 0;
+                string now = DateTime.UtcNow.ToString("o");
+
+                foreach (var id in idList)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+                        UPDATE tickets SET
+                            status = @status,
+                            updated_at = @updated,
+                            completed_at = CASE WHEN @status = 'done' AND completed_at IS NULL THEN @updated WHEN @status != 'done' THEN NULL ELSE completed_at END,
+                            killed_at = CASE WHEN @status = 'killed' AND killed_at IS NULL THEN @updated WHEN @status != 'killed' THEN NULL ELSE killed_at END
+                        WHERE id = @id;
+                    ";
+                    cmd.Parameters.AddWithValue("@status", newStatus.ToKey());
+                    cmd.Parameters.AddWithValue("@updated", now);
+                    cmd.Parameters.AddWithValue("@id", id);
+                    updatedCount += cmd.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+                return updatedCount;
+            }
+        }
+
+        public int UpdateTicketsPriority(IEnumerable<string> ids, TicketPriority newPriority)
+        {
+            var idList = ids.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+            if (idList.Count == 0) return 0;
+
+            lock (_dbLock)
+            {
+                using var conn = CreateConnection();
+                using var tx = conn.BeginTransaction();
+                int updatedCount = 0;
+                string now = DateTime.UtcNow.ToString("o");
+
+                foreach (var id in idList)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+                        UPDATE tickets SET
+                            priority = @priority,
+                            updated_at = @updated
+                        WHERE id = @id;
+                    ";
+                    cmd.Parameters.AddWithValue("@priority", newPriority.ToKey());
+                    cmd.Parameters.AddWithValue("@updated", now);
+                    cmd.Parameters.AddWithValue("@id", id);
+                    updatedCount += cmd.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+                return updatedCount;
             }
         }
 
@@ -603,7 +767,7 @@ namespace KerkenezTicket.Services
             string tagsEnc = reader.IsDBNull(8) ? "" : reader.GetString(8);
             string notesEnc = reader.IsDBNull(9) ? "" : reader.GetString(9);
 
-            // Decrypt DPAPI protected fields
+            // Read fields (with backwards-compatible fallback for legacy DPAPI data)
             item.Title = TicketCryptoService.DecryptString(titleEnc);
             item.Description = TicketCryptoService.DecryptString(descEnc);
             item.Notes = TicketCryptoService.DecryptString(notesEnc);

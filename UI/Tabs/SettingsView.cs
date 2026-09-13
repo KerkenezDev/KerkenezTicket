@@ -37,7 +37,7 @@ namespace KerkenezTicket.UI.Tabs
         private Label _lblScalePreview = null!;
         private Button _btnApplyWindowSizeNow = null!;
 
-        // Card 3: DPAPI Storage & Backup
+        // Card 3: Storage & Backups
         private TextBox _txtDbPath = null!;
         private Button _btnOpenDbFolder = null!;
         private TextBox _txtBackupDir = null!;
@@ -118,7 +118,7 @@ namespace KerkenezTicket.UI.Tabs
 
             var lblSubtitle = new Label
             {
-                Text = "Configure ticket workflow defaults, window layout preferences, and local DPAPI backup options.",
+                Text = "Configure ticket workflow defaults, window layout preferences, database path, and backups.",
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(108, 117, 125),
                 AutoSize = true,
@@ -357,22 +357,9 @@ namespace KerkenezTicket.UI.Tabs
 
             mainFlow.Controls.Add(cardUi);
 
-            // ==================== Card 3: DPAPI Storage & Backups ====================
+            // ==================== Card 3: Storage & Backups ====================
             var card3 = CreateCardPanel(CardWidth);
-            card3.Controls.Add(CreateSectionHeader("🔒  Local Storage & DPAPI Encryption"));
-
-            var lblSecNotice = new Label
-            {
-                Text = "All ticket titles, descriptions, work notes, and tags are encrypted with Windows Data Protection API (DPAPI) tied to your local interactive Windows account with suite entropy.",
-                Font = new Font("Segoe UI", 8.5F),
-                ForeColor = Color.FromArgb(0, 102, 204),
-                BackColor = Color.FromArgb(235, 243, 252),
-                Padding = new Padding(10, 8, 10, 8),
-                Width = CardWidth - 48,
-                Height = 38,
-                Margin = new Padding(0, 0, 0, 14)
-            };
-            card3.Controls.Add(lblSecNotice);
+            card3.Controls.Add(CreateSectionHeader("💾  Database & Backups"));
 
             // Database File Row
             var lblDb = new Label { Text = "SQLite Database Path:", Font = new Font("Segoe UI", 9F, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
@@ -768,7 +755,7 @@ namespace KerkenezTicket.UI.Tabs
                 BorderStyle = BorderStyle.None,
                 Margin = new Padding(0, 0, 0, 10),
                 Text =
-@"# 1. Create a ticket (DPAPI encrypted)
+@"# 1. Create a ticket
 kticket add ""<title>"" -a <app> -p <priority> -t <type> [-d <desc>]
   Example: kticket add ""fix a refresh error sync on x situation"" -a myapp -p high -t sync
 

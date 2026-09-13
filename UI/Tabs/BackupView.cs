@@ -69,7 +69,7 @@ namespace KerkenezTicket.UI.Tabs
 
             var lblTitle = new Label
             {
-                Text = "💾  Backup & DPAPI Security",
+                Text = "💾  Backup & Storage",
                 Font = new Font("Segoe UI", 16F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(24, 28, 36),
                 AutoSize = true,
@@ -78,7 +78,7 @@ namespace KerkenezTicket.UI.Tabs
 
             var lblSubtitle = new Label
             {
-                Text = "Export single-file backup packages, restore tickets, and inspect local DPAPI database encryption.",
+                Text = "Export single-file backup packages, restore tickets, and inspect local database storage.",
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(108, 117, 125),
                 AutoSize = true,
@@ -165,7 +165,7 @@ namespace KerkenezTicket.UI.Tabs
 
             var lblRestoreDesc = new Label
             {
-                Text = "Select an existing .ktbackup or .json backup package to import. New tickets are automatically inserted and DPAPI encrypted into the local SQLite database.",
+                Text = "Select an existing .ktbackup or .json backup package to import. New tickets are automatically inserted into the local SQLite database.",
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(70, 75, 85),
                 AutoSize = true,
@@ -192,42 +192,17 @@ namespace KerkenezTicket.UI.Tabs
 
             mainFlow.Controls.Add(card2);
 
-            // ==================== Card 3: Security & Storage Info ====================
+            // ==================== Card 3: Storage Info ====================
             var card3 = CreateCardPanel(ContentWidth);
-            card3.Controls.Add(CreateSectionHeader("🔒  Local Storage & DPAPI Encryption Status"));
+            card3.Controls.Add(CreateSectionHeader("📁  Local Storage Status"));
 
             _lblDbPath = new Label { Font = new Font("Segoe UI", 9F), ForeColor = Color.FromArgb(40, 40, 40), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
             _lblDbSize = new Label { Font = new Font("Segoe UI", 9F), ForeColor = Color.FromArgb(40, 40, 40), AutoSize = true, Margin = new Padding(0, 0, 0, 4) };
             _lblDbTickets = new Label { Font = new Font("Segoe UI", 9F, FontStyle.Bold), ForeColor = Color.FromArgb(20, 20, 20), AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
 
-            var pnlBadge = new Panel
-            {
-                BackColor = Color.FromArgb(235, 245, 255),
-                Width = ContentWidth - 40,
-                Height = 46,
-                Padding = new Padding(10),
-                Margin = new Padding(0, 0, 0, 8)
-            };
-            pnlBadge.Paint += (s, e) =>
-            {
-                using var pen = new Pen(Color.FromArgb(180, 215, 250), 1);
-                e.Graphics.DrawRectangle(pen, 0, 0, pnlBadge.Width - 1, pnlBadge.Height - 1);
-            };
-
-            var lblBadgeText = new Label
-            {
-                Text = "🔒  Active Protection: Windows DPAPI (CurrentUser scope with suite entropy).\r\nAll ticket titles, descriptions, notes, and tags are encrypted at rest in SQLite.",
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(0, 102, 204),
-                AutoSize = true,
-                Location = new Point(10, 6)
-            };
-            pnlBadge.Controls.Add(lblBadgeText);
-
             card3.Controls.Add(_lblDbPath);
             card3.Controls.Add(_lblDbSize);
             card3.Controls.Add(_lblDbTickets);
-            card3.Controls.Add(pnlBadge);
 
             mainFlow.Controls.Add(card3);
 

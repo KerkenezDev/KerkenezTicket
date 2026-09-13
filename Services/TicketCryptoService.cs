@@ -10,36 +10,27 @@ namespace KerkenezTicket.Services
         private static readonly byte[] FallbackSuiteEntropy = Encoding.UTF8.GetBytes("Kerkenez.SecureSuite.v1");
 
         /// <summary>
-        /// Encrypts sensitive string data using Windows DPAPI tied to the current interactive Windows user.
+        /// Pass-through plaintext string (DPAPI encryption removed).
         /// </summary>
         public static string EncryptString(string? plainText)
         {
-            if (string.IsNullOrEmpty(plainText))
-            {
-                return "";
-            }
-
-            try
-            {
-                byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
-                byte[] cipherBytes = ProtectedData.Protect(plainBytes, PrimaryTicketEntropy, DataProtectionScope.CurrentUser);
-                return Convert.ToBase64String(cipherBytes);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[TicketCryptoService] Encryption failed: {ex.Message}");
-                return "";
-            }
+            return plainText ?? "";
         }
 
         /// <summary>
-        /// Decrypts a Base64 DPAPI ciphertext string into plaintext.
+        /// Decrypts a legacy Base64 DPAPI ciphertext string into plaintext if encrypted; otherwise returns as-is.
         /// </summary>
         public static string DecryptString(string? cipherText)
         {
             if (string.IsNullOrWhiteSpace(cipherText))
             {
                 return "";
+            }
+
+            // Quick check: if string contains spaces, newlines, or cannot be base64, return as-is
+            if (cipherText.Contains(' ') || cipherText.Contains('\n') || cipherText.Contains('\r'))
+            {
+                return cipherText;
             }
 
             try
@@ -60,37 +51,19 @@ namespace KerkenezTicket.Services
                     }
                 }
 
-                // If ciphertext was somehow unencrypted legacy text, return as-is
                 return cipherText;
             }
-            catch (Exception ex)
+            catch
             {
-                System.Diagnostics.Debug.WriteLine($"[TicketCryptoService] Decryption error: {ex.Message}");
                 return cipherText;
             }
         }
 
-        /// <summary>
-        /// Encrypts raw bytes using Windows DPAPI.
-        /// </summary>
         public static byte[] EncryptBytes(byte[]? plainBytes)
         {
-            if (plainBytes == null || plainBytes.Length == 0) return Array.Empty<byte>();
-
-            try
-            {
-                return ProtectedData.Protect(plainBytes, PrimaryTicketEntropy, DataProtectionScope.CurrentUser);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[TicketCryptoService] Byte encryption failed: {ex.Message}");
-                return Array.Empty<byte>();
-            }
+            return plainBytes ?? Array.Empty<byte>();
         }
 
-        /// <summary>
-        /// Decrypts DPAPI-protected bytes.
-        /// </summary>
         public static byte[] DecryptBytes(byte[]? cipherBytes)
         {
             if (cipherBytes == null || cipherBytes.Length == 0) return Array.Empty<byte>();
@@ -108,7 +81,7 @@ namespace KerkenezTicket.Services
                 }
             }
 
-            return Array.Empty<byte>();
+            return cipherBytes;
         }
     }
 }

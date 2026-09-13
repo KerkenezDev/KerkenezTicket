@@ -106,7 +106,7 @@ namespace KerkenezTicket.UI.Tabs
 
             var lblSubtitle = new Label
             {
-                Text = "Create an internal ticket. Data is stored at %APPDATA%\\Kerkenez\\ticket\\tickets.db and protected by Windows DPAPI.",
+                Text = "Create an internal ticket. Data is stored locally at %APPDATA%\\Kerkenez\\ticket\\tickets.db.",
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(108, 117, 125),
                 AutoSize = true,

@@ -169,7 +169,7 @@ namespace KerkenezTicket.UI
 
             _lblStatus = new ToolStripStatusLabel
             {
-                Text = "Ready | SQLite DB: %APPDATA%\\Kerkenez\\ticket\\tickets.db (DPAPI Encrypted)",
+                Text = "Ready | SQLite DB: %APPDATA%\\Kerkenez\\ticket\\tickets.db",
                 Spring = true,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.FromArgb(50, 50, 50)
@@ -261,7 +261,7 @@ namespace KerkenezTicket.UI
 
             // Log startup
             LogService.Info("Application", "Kerkenez Ticket initialized.");
-            LogService.Info("Database", $"SQLite storage active: {ConfigService.DatabaseFilePath} (DPAPI Encrypted)");
+            LogService.Info("Database", $"SQLite storage active: {ConfigService.DatabaseFilePath}");
 
             // Persist window size on resize end
             this.ResizeEnd += (s, e) =>

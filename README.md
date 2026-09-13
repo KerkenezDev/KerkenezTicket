@@ -1,12 +1,12 @@
 # Kerkenez Ticket
 
-A local-first, zero-telemetry, DPAPI-encrypted ticket and issue tracking desktop application and CLI tailored specifically for solo developers and independent software engineers.
+A local-first, zero-telemetry ticket and issue tracking desktop application and CLI tailored specifically for solo developers and independent software engineers.
 
 ---
 
 ## Highlights
 
-- **Local-First & Private**: Stores all data on your machine in SQLite (`%APPDATA%\Kerkenez\ticket\tickets.db`). Sensitive fields (titles, descriptions, tags, notes) are hardware-encrypted with Windows DPAPI.
+- **Local-First & Private**: Stores all data on your machine in standard SQLite (`%APPDATA%\Kerkenez\ticket\tickets.db`). No cloud accounts, no external servers, and zero telemetry.
 - **Custom Projects & Apps**: Track issues across any number of projects without rigid presets. Add, customize, and badge projects with your own colors.
 - **Full CLI (`kticket`)**: Create, list, inspect, and transition tickets directly from your command line or scripts.
 - **Flexible UI**: Dual-pane layout with persistent splitter memory, live real-time system logs, automated single-file JSON backups, and multi-monitor DPI support.

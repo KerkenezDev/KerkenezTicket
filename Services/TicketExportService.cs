@@ -155,7 +155,28 @@ namespace KerkenezTicket.Services
                     string itemBase = $"{t.FormattedId}_{safeTitle}";
 
                     string relativePath;
-                    if (t.AttachmentCount > 0)
+                    if (format == ExportFormat.Markdown)
+                    {
+                        string mdFile = $"{itemBase}.md";
+                        string mdPath = Path.Combine(batchFolder, mdFile);
+                        File.WriteAllText(mdPath, GenerateTicketMarkdown(t, null), Encoding.UTF8);
+                        relativePath = mdFile;
+
+                        if (t.AttachmentCount > 0)
+                        {
+                            string attDir = Path.Combine(batchFolder, "attachments", itemBase);
+                            Directory.CreateDirectory(attDir);
+                            foreach (var a in t.Attachments)
+                            {
+                                string src = AttachmentStorageService.GetAttachmentFullPath(a);
+                                if (File.Exists(src))
+                                {
+                                    File.Copy(src, Path.Combine(attDir, a.FileName), true);
+                                }
+                            }
+                        }
+                    }
+                    else if (t.AttachmentCount > 0 || format == ExportFormat.Folder)
                     {
                         ExportTicketFolder(t, batchFolder, itemBase);
                         relativePath = $"{itemBase}/{itemBase}.md";
@@ -174,7 +195,7 @@ namespace KerkenezTicket.Services
 
                 File.WriteAllText(Path.Combine(batchFolder, "INDEX.md"), sbIndex.ToString(), Encoding.UTF8);
 
-                if (format == ExportFormat.Folder)
+                if (format == ExportFormat.Folder || format == ExportFormat.Markdown)
                 {
                     string destFolder = Path.Combine(outputDir, batchName);
                     if (Directory.Exists(destFolder)) Directory.Delete(destFolder, true);
